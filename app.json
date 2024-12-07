@@ -1,0 +1,59 @@
+{
+  "expo": {
+    "name": "roll2bowl",
+    "slug": "roll2bowl-technologies",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "myapp",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/images/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.roll2bowl.technologies"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.roll2bowl.technologies"
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "newArchEnabled": true
+          },
+          "android": {
+            "newArchEnabled": true
+          }
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "f8cfb92e-0584-4f94-867e-a11d1cc0e2e1"
+      }
+    },
+    "owner": "chandru-2606"
+  }
+}
