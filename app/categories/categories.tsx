@@ -80,23 +80,29 @@ export default function TabOneScreen() {
 
   const navigation = useNavigation()
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     navigation.setOptions({
-      headerShown: false, 
-    })
-  }, [navigation])
+      title: 'Category',
+      headerStyle: {
+        backgroundColor: '#ffffff',
+      },
+      headerTitleStyle: {
+        color: '#000000',
+        fontWeight: 'bold',
+      },
+      headerTintColor: '#000000',
+    });
+  }, [navigation]);
 
   return (
-    <YStack f={1} bg="white">
-      <XStack ai="center" jc="space-between" p="$4" pb="$2">
-  {/* Back Button */}
+    <YStack f={1} bg="#fffffff" mt="$5" >
+      {/* <XStack ai="center" jc="space-between" p="$4" pb="$2">
   <Button size="$4" bg="transparent" color="#111818"
     onPress={() => navigation.goBack()} 
   >
     <Icon name="arrow-back" size={24} color="#111818" />
   </Button>
 
-  {/* Header Title */}
   <Text
     color="#111818"
     fontSize="$6"
@@ -105,10 +111,8 @@ export default function TabOneScreen() {
     f={1}
     pl="$10" 
   >
-    {/* Title */}
   </Text>
 
-  {/* Search Button */}
   <Button
     circular
     size="$4"
@@ -118,7 +122,7 @@ export default function TabOneScreen() {
   >
     <Icon name="search" size={24} color="#111818" />
   </Button>
-</XStack>
+</XStack> */}
 
 
 

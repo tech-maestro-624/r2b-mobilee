@@ -1,5 +1,3 @@
-// ConfirmDeliveryLocation.tsx
-
 import React, { useState, useEffect, useLayoutEffect } from 'react';
 import {
   YStack,
@@ -11,11 +9,12 @@ import {
   ScrollView,
 } from 'tamagui';
 import { MapPin, ChevronLeft } from '@tamagui/lucide-icons';
-import { Pressable, Alert } from 'react-native';
+import { Pressable, Alert, ActivityIndicator, StyleSheet } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import MapView from 'react-native-maps';
+import MapView, { UrlTile } from 'react-native-maps';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { debounce } from 'lodash';
 
 export default function ConfirmDeliveryLocation() {
   const navigation = useNavigation();
@@ -28,6 +27,7 @@ export default function ConfirmDeliveryLocation() {
     flatNumber: '',
     landmark: '',
   });
+  const [isLoading, setIsLoading] = useState(true);
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -43,6 +43,7 @@ export default function ConfirmDeliveryLocation() {
           'Permission Denied',
           'Location permission is required to use this feature.'
         );
+        setIsLoading(false);
         return;
       }
 
@@ -60,6 +61,7 @@ export default function ConfirmDeliveryLocation() {
         latitude: location.coords.latitude,
         longitude: location.coords.longitude,
       });
+      setIsLoading(false);
     })();
   }, []);
 
@@ -91,14 +93,17 @@ export default function ConfirmDeliveryLocation() {
   };
 
   const handleConfirmAddress = async () => {
+    if (!addressDetails.flatNumber.trim()) {
+      Alert.alert('Validation Error', 'Please enter your flat/house number.');
+      return;
+    }
+
     try {
-      // Get existing addresses
       const storedAddresses = await AsyncStorage.getItem('addresses');
       let addresses = storedAddresses ? JSON.parse(storedAddresses) : [];
 
-      // Create a new address object
       const newAddress = {
-        id: Date.now(), // Unique ID for the address
+        id: Date.now(),
         name: addressType,
         address:
           addressDetails.flatNumber +
@@ -108,21 +113,33 @@ export default function ConfirmDeliveryLocation() {
         longitude: selectedLocation.longitude,
       };
 
-      // Add new address to the array
       addresses.push(newAddress);
 
-      // Save updated addresses to AsyncStorage
       await AsyncStorage.setItem('addresses', JSON.stringify(addresses));
-
-      // Set the selected address
       await AsyncStorage.setItem('selectedAddress', JSON.stringify(newAddress));
 
       setIsSheetOpen(false);
       navigation.goBack();
     } catch (error) {
       console.error('Error saving address:', error);
+      Alert.alert('Error', 'There was an issue saving your address. Please try again.');
     }
   };
+
+  const handleRegionChangeComplete = debounce((region) => {
+    setSelectedLocation({
+      latitude: region.latitude,
+      longitude: region.longitude,
+    });
+  }, 500);
+
+  if (isLoading) {
+    return (
+      <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor="#ffffff">
+        <ActivityIndicator size="large" color="#10b981" />
+      </YStack>
+    );
+  }
 
   return (
     <YStack flex={1} backgroundColor="#ffffff">
@@ -148,39 +165,36 @@ export default function ConfirmDeliveryLocation() {
           <MapView
             style={{ flex: 1 }}
             initialRegion={currentRegion}
-            onRegionChangeComplete={(region) => {
-              setSelectedLocation({
-                latitude: region.latitude,
-                longitude: region.longitude,
-              });
-            }}
+            provider={null}
+            // Do not specify a provider, or set `provider={null}`.
+            // Set mapType to 'none' so that no default map is rendered.
+            mapType="none"
+            onRegionChangeComplete={handleRegionChangeComplete}
             showsUserLocation
-          />
+          >
+            {/* OpenStreetMap Tiles */}
+            <UrlTile
+              urlTemplate="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              maximumZ={19}
+              flipY={false}
+              tileSize={256}
+              shouldReplaceMapContent={true}
+            />
+          </MapView>
         )}
         {/* Fixed Center Pin */}
         <YStack
           position="absolute"
           top="50%"
           left="50%"
-          style={{ marginLeft: -24, marginTop: -48 }}
+          style={styles.centerPin}
         >
           <MapPin size={48} color="#e11d48" />
         </YStack>
         {/* Use Current Location Button */}
         <Pressable
           onPress={handleUseCurrentLocation}
-          style={{
-            position: 'absolute',
-            bottom: 120,
-            right: 20,
-            backgroundColor: '#ffffff',
-            padding: 10,
-            borderRadius: 50,
-            shadowColor: '#000',
-            shadowOpacity: 0.1,
-            shadowRadius: 5,
-            shadowOffset: { width: 0, height: 2 },
-          }}
+          style={styles.currentLocationButton}
         >
           <MapPin size={24} color="#1f2937" />
         </Pressable>
@@ -204,7 +218,8 @@ export default function ConfirmDeliveryLocation() {
         modal
         open={isSheetOpen}
         onOpenChange={setIsSheetOpen}
-        snapPoints={[60]}
+        snapPoints={[300, 450]} // Fixed pixel values
+        snapPointsMode="fixed"
         position={0}
         dismissOnSnapToBottom
       >
@@ -286,3 +301,22 @@ export default function ConfirmDeliveryLocation() {
     </YStack>
   );
 }
+
+const styles = StyleSheet.create({
+  centerPin: {
+    marginLeft: -24,
+    marginTop: -48,
+  },
+  currentLocationButton: {
+    position: 'absolute',
+    bottom: 120,
+    right: 20,
+    backgroundColor: '#ffffff',
+    padding: 10,
+    borderRadius: 50,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 2 },
+  },
+});

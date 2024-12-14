@@ -7,13 +7,14 @@ import { getCategory } from 'app/api/category';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import AddressSelectionSheet from 'app/cart/AddressSelectionSheet';
-import { TouchableOpacity } from 'react-native';
+import { TouchableOpacity, View } from 'react-native';
 import { useOrder } from 'app/context/orderContext';
+
 interface Address {
   id: number;
-  name: string; 
-  city: string; 
-  address: string; 
+  name: string;
+  city: string;
+  address: string;
   type: string;
   latitude: number;
   longitude: number;
@@ -25,39 +26,37 @@ interface Restaurant {
   image?: string;
   rating: number;
   address: string;
+  description?: string;
 }
 
 export default function Index() {
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [categories, setCategories] = useState([]);
+  const [loading, setLoading] = useState(true);
   const { updateOrderState } = useOrder();
 
-  
-  // Address Selection States
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [selectedAddress, setSelectedAddress] = useState<Address | null>(null);
-  const [isSheetOpen, setIsSheetOpen] = useState(false); 
-  
-  // Fetch Restaurants and Categories
+  const [isSheetOpen, setIsSheetOpen] = useState(false);
+
   const fetchRestaurants = useCallback(async () => {
     try {
       const response = await getRestaurant();
       setRestaurants(response.data.restaurants);
-    } catch (error) {
+    } catch (error: any) {
       console.log('Error fetching restaurants:', error.message);
     }
   }, []);
-  
+
   const fetchCategories = useCallback(async () => {
     try {
       const response = await getCategory({ condition: { isGlobal: true } });
       setCategories(response.data.categories);
-    } catch (error) {
+    } catch (error: any) {
       console.log('Error fetching categories:', error);
     }
   }, []);
-  
-  // Fetch Addresses from AsyncStorage
+
   const fetchAddresses = useCallback(async () => {
     try {
       const storedAddresses = await AsyncStorage.getItem('addresses');
@@ -66,7 +65,7 @@ export default function Index() {
         parsedAddresses = JSON.parse(storedAddresses);
       }
       setAddresses(parsedAddresses);
-  
+
       const storedSelectedAddress = await AsyncStorage.getItem('selectedAddress');
       if (storedSelectedAddress) {
         const parsedSelectedAddress = JSON.parse(storedSelectedAddress);
@@ -81,26 +80,39 @@ export default function Index() {
       setSelectedAddress(null);
     }
   }, []);
-  
-  // Handle Address Selection
+
   const handleSetSelectedAddress = useCallback(async (address: Address) => {
     setSelectedAddress(address);
     await AsyncStorage.setItem('selectedAddress', JSON.stringify(address));
   }, []);
-  
-  // Fetch data when component is focused
+
   useFocusEffect(
     useCallback(() => {
-      fetchRestaurants();
-      fetchCategories();
-      fetchAddresses();
+      setLoading(true);
+      Promise.all([fetchRestaurants(), fetchCategories(), fetchAddresses()])
+        .then(() => {
+          setLoading(false);
+        })
+        .catch((e) => {
+          console.log('Error during fetching:', e);
+          setLoading(false);
+        });
     }, [fetchRestaurants, fetchCategories, fetchAddresses])
   );
-  
+
   const topRatedRestaurants = restaurants.filter(
     (restaurant) => restaurant.rating >= 4.5
   );
-  
+
+  // Skeleton Components
+  const SkeletonBox = ({ width, height, borderRadius = 4, style = {} }: { width: number | string; height: number; borderRadius?: number; style?: any }) => (
+    <View style={[{ width, height, backgroundColor: '#e0e0e0', borderRadius }, style]} />
+  );
+
+  const SkeletonText = ({ width, height = 10, style = {} }: { width: number | string; height?: number; style?: any }) => (
+    <SkeletonBox width={width} height={height} borderRadius={4} style={style} />
+  );
+
   return (
     <YStack flex={1} backgroundColor="white">
       <XStack
@@ -113,46 +125,60 @@ export default function Index() {
         borderBottomColor="#E0E0E0"
       >
         <XStack ai="center" f={1}>
-          <Image
-            source={{ uri: 'https://via.placeholder.com/40' }}
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: 20,
-              marginRight: 8,
+          {loading ? (
+            <SkeletonBox width={40} height={40} borderRadius={20} style={{ marginRight: 8 }} />
+          ) : (
+            <Image
+              source={{ uri: 'https://via.placeholder.com/40' }}
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                marginRight: 8,
+              }}
+              alt="Left Circular Image"
+            />
+          )}
+          <TouchableOpacity
+            onPress={() => {
+              setIsSheetOpen(true);
             }}
-            alt="Left Circular Image"
-          />
-          <TouchableOpacity onPress={() => {
-          setIsSheetOpen(true);
-        }}>
-          <YStack>
-            <Text
-              color="#111818"
-              fontSize="$6"
-              fontWeight="800"
-              ta="left"
-              marginLeft={10}
-            >
-              {selectedAddress
-                ? `${selectedAddress.name}`
-                : 'Select Address'}
-            </Text>
-            {selectedAddress && (
-              <Text
-                color="#6b7280"
-                fontSize="$4"
-                fontWeight="500"
-                ta="left"
-                marginLeft={10}
-              >
-                {selectedAddress.address}
-              </Text>
+            disabled={loading}
+          >
+            {loading ? (
+              <YStack>
+                <SkeletonText width={100} height={14} style={{ marginLeft: 10, marginBottom: 6 }} />
+                <SkeletonText width={140} height={12} style={{ marginLeft: 10 }} />
+              </YStack>
+            ) : (
+              <YStack>
+                <Text
+                  color="#111818"
+                  fontSize="$6"
+                  fontWeight="800"
+                  ta="left"
+                  marginLeft={10}
+                >
+                  {selectedAddress ? `${selectedAddress.name}` : 'Add Address'}
+                </Text>
+                {selectedAddress && (
+                  <Text
+                    color="#6b7280"
+                    fontSize="$4"
+                    fontWeight="500"
+                    ta="left"
+                    marginLeft={10}
+                  >
+                    {selectedAddress.address}
+                  </Text>
+                )}
+              </YStack>
             )}
-          </YStack>
           </TouchableOpacity>
         </XStack>
-
+        {loading ? (
+          <SkeletonBox width={48} height={48} borderRadius={24} />
+        ) : (
           <Image
             source={require('../../assets/images/logo.png')}
             style={{
@@ -161,78 +187,102 @@ export default function Index() {
             }}
             alt="Logo"
           />
+        )}
       </XStack>
 
-      {/* Search Bar */}
       <YStack paddingHorizontal="$4" paddingVertical="$3">
-        <XStack
-          alignItems="center"
-          height={48}
-          backgroundColor="#f0f5f5"
-          borderRadius="$4"
-        >
-          <MaterialIcons
-            name="search"
-            size={24}
-            color="#608a8a"
-            style={{ marginLeft: 16, marginRight: 8 }}
-          />
-          <Link href='/search/restaurantSearch' asChild>
-          <Input
-            placeholder="What do you feel like?"
-            placeholderTextColor="#608a8a"
-            flex={1}
-            borderWidth={0}
-            backgroundColor="transparent"
-            color="#111818"
-            fontSize={16}
-            fontWeight="400"
-          />
-          </Link>
-        </XStack>
+        {loading ? (
+          <XStack
+            alignItems="center"
+            height={48}
+            backgroundColor="#f0f5f5"
+            borderRadius="$4"
+            paddingHorizontal={16}
+          >
+            <SkeletonBox width={24} height={24} borderRadius={12} style={{ marginRight: 8 }} />
+            <SkeletonText width="60%" height={16} />
+          </XStack>
+        ) : (
+          <XStack
+            alignItems="center"
+            height={48}
+            backgroundColor="#f0f5f5"
+            borderRadius="$4"
+          >
+            <MaterialIcons
+              name="search"
+              size={24}
+              color="#608a8a"
+              style={{ marginLeft: 16, marginRight: 8 }}
+            />
+            <Link href="/search/restaurantSearch" asChild>
+              <Input
+                placeholder="What do you feel like?"
+                placeholderTextColor="#608a8a"
+                flex={1}
+                borderWidth={0}
+                backgroundColor="transparent"
+                color="#111818"
+                fontSize={16}
+                fontWeight="400"
+              />
+            </Link>
+          </XStack>
+        )}
       </YStack>
 
       <ScrollView flex={1}>
         <YStack paddingBottom="$3" marginTop={10}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: 16 }}
-          >
-            <XStack space="$3">
-              {categories.map((category) => (
-                <Link
-                  href={{
-                    pathname: '/categories/categories',
-                    params: { categoryId: category._id },
-                  }}
-                  asChild
-                  key={category._id}
-                >
-                  <YStack
-                    alignItems="center"
-                    justifyContent="center"
-                    space={8}
-                    cursor="pointer"
-                  >
-                    <Image
-                      source={{ uri: 'https://via.placeholder.com/50' }}
-                      width={70}
-                      height={70}
-                      borderRadius={35}
-                      alt={category.name}
-                    />
-                    <Text color="grey" fontSize={10} fontWeight="700">
-                      {category.name}
-                    </Text>
+          {loading ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingHorizontal: 16 }}
+            >
+              <XStack space="$3">
+                {[...Array(5)].map((_, idx) => (
+                  <YStack alignItems="center" justifyContent="center" space={8} key={idx}>
+                    <SkeletonBox width={70} height={70} borderRadius={35} />
+                    <SkeletonText width={50} />
                   </YStack>
-                </Link>
-              ))}
-            </XStack>
-          </ScrollView>
+                ))}
+              </XStack>
+            </ScrollView>
+          ) : (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingHorizontal: 16 }}
+            >
+              <XStack space="$3">
+                {categories.map((category: any) => (
+                  <Link
+                    href={{
+                      pathname: '/categories/categories',
+                      params: { categoryId: category._id },
+                    }}
+                    asChild
+                    key={category._id}
+                  >
+                    <YStack alignItems="center" justifyContent="center" space={8}>
+                      <Image
+                        source={{ uri: 'https://via.placeholder.com/50' }}
+                        width={70}
+                        height={70}
+                        borderRadius={35}
+                        alt={category.name}
+                      />
+                      <Text color="grey" fontSize={10} fontWeight="700">
+                        {category.name}
+                      </Text>
+                    </YStack>
+                  </Link>
+                ))}
+              </XStack>
+            </ScrollView>
+          )}
         </YStack>
 
-        {/* Top Rated Restaurants Section */}
         <YStack paddingHorizontal={20} paddingBottom={20}>
           <Text
             color="#111818"
@@ -242,7 +292,28 @@ export default function Index() {
           >
             Top Rated
           </Text>
-          {topRatedRestaurants.length > 0 ? (
+          {loading ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <XStack space={16}>
+                {[...Array(3)].map((_, idx) => (
+                  <YStack
+                    key={idx}
+                    width={160}
+                    backgroundColor="white"
+                    borderRadius={8}
+                    borderWidth={0.5}
+                    borderColor="#E0E0E0"
+                    padding={12}
+                  >
+                    <SkeletonBox width="100%" height={120} borderRadius={8} style={{ marginBottom: 8 }} />
+                    <SkeletonText width="80%" style={{ marginBottom: 4 }} />
+                    <SkeletonText width="50%" style={{ marginBottom: 8 }} />
+                    <SkeletonBox width="100%" height={40} borderRadius={4} />
+                  </YStack>
+                ))}
+              </XStack>
+            </ScrollView>
+          ) : topRatedRestaurants.length > 0 ? (
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               <XStack space={16}>
                 {topRatedRestaurants.map((restaurant) => (
@@ -270,11 +341,7 @@ export default function Index() {
                       borderRadius={8}
                       alt={restaurant.name}
                     />
-                    <YStack
-                      padding={12}
-                      flex={1}
-                      justifyContent="space-between"
-                    >
+                    <YStack padding={12} flex={1} justifyContent="space-between">
                       <Text
                         color="#111818"
                         fontSize={14}
@@ -307,13 +374,10 @@ export default function Index() {
                         </Button>
                       </Link>
                     </YStack>
-
-                    {/* Decorative Triangle */}
                     <YStack
                       position="absolute"
                       bottom={-10}
                       left="50%"
-                      transform="translateX(-50%) rotate(180deg)"
                       width={0}
                       height={0}
                       borderLeftWidth={10}
@@ -328,19 +392,109 @@ export default function Index() {
               </XStack>
             </ScrollView>
           ) : (
-            <Text fontSize={14} color="#6b7280" textAlign="center">
-              No top-rated restaurants available at the moment.
-            </Text>
+            !loading && (
+              <Text fontSize={14} color="#6b7280" textAlign="center">
+                No top-rated restaurants available at the moment.
+              </Text>
+            )
           )}
         </YStack>
-        <YStack padding={16}>
-          <Text>
+
+        <YStack padding={16} backgroundColor="#f9f9f9" borderTopWidth={1} borderTopColor="#E0E0E0">
+          <Text color="#111818" fontSize={16} fontWeight="700" marginBottom={12}>
             Explore More
           </Text>
+          {loading ? (
+            <YStack space="$3">
+              {[...Array(3)].map((_, idx) => (
+                <YStack
+                  key={idx}
+                  padding={12}
+                  backgroundColor="white"
+                  borderRadius={8}
+                  borderWidth={0.5}
+                  borderColor="#E0E0E0"
+                  shadowColor="rgba(0, 0, 0, 0.05)"
+                  shadowOpacity={1}
+                  shadowRadius={2}
+                  shadowOffset={{ width: 0, height: 1 }}
+                >
+                  <XStack alignItems="center">
+                    <SkeletonBox width={90} height={90} borderRadius={8} style={{ marginRight: 12 }} />
+                    <YStack flex={1}>
+                      <SkeletonText width="80%" style={{ marginBottom: 6 }} />
+                      <SkeletonText width="60%" style={{ marginBottom: 6 }} />
+                      <SkeletonText width="30%" />
+                    </YStack>
+                  </XStack>
+                </YStack>
+              ))}
+            </YStack>
+          ) : restaurants.length > 0 ? (
+            <YStack space="$3">
+              {restaurants.map((restaurant) => (
+                <Link
+                  href="/resturantDetails/resturant"
+                  asChild
+                  key={restaurant._id}
+                  onPress={() => {
+                    updateOrderState('restaurantId', restaurant?._id);
+                  }}
+                >
+                  <TouchableOpacity activeOpacity={0.9}>
+                    <YStack
+                      padding={12}
+                      backgroundColor="white"
+                      borderRadius={8}
+                      borderWidth={0.5}
+                      borderColor="#E0E0E0"
+                      shadowColor="rgba(0, 0, 0, 0.05)"
+                      shadowOpacity={1}
+                      shadowRadius={2}
+                      shadowOffset={{ width: 0, height: 1 }}
+                    >
+                      <XStack alignItems="center">
+                        <Image
+                          source={{
+                            uri: restaurant.image || 'https://via.placeholder.com/80x80',
+                          }}
+                          width={90}
+                          height={90}
+                          borderRadius={8}
+                          alt={restaurant.name}
+                        />
+                        <YStack flex={1} paddingHorizontal={12}>
+                          <Text color="#111818" fontSize={14} fontWeight="600" marginBottom={4}>
+                            {restaurant.name}
+                          </Text>
+                          {restaurant.description && (
+                            <Text color="#6b7280" fontSize={12} numberOfLines={2} marginBottom={4}>
+                              {restaurant.description}
+                            </Text>
+                          )}
+                          <XStack alignItems="center">
+                            <MaterialIcons name="star" size={14} color="#fbbf24" />
+                            <Text color="#608a8a" fontSize={12} marginLeft={4}>
+                              {restaurant.rating.toFixed(1)}
+                            </Text>
+                          </XStack>
+                        </YStack>
+                      </XStack>
+                    </YStack>
+                  </TouchableOpacity>
+                </Link>
+              ))}
+            </YStack>
+          ) : (
+            !loading && (
+              <Text fontSize={14} color="#6b7280" textAlign="center">
+                No restaurants available to explore right now.
+              </Text>
+            )
+          )}
         </YStack>
       </ScrollView>
 
-      {/* Address Selection Sheet */}
       <AddressSelectionSheet
         isOpen={isSheetOpen}
         onOpenChange={setIsSheetOpen}
@@ -348,12 +502,6 @@ export default function Index() {
         selectedAddress={selectedAddress}
         setSelectedAddress={handleSetSelectedAddress}
       />
-
-      {/* Place Order Section (Optional) */}
-      {/* 
-        If you have a place order section similar to the Cart component,
-        you can include it here. Ensure it doesn't interfere with the current setup.
-      */}
     </YStack>
   );
 }

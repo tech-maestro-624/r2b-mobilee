@@ -97,7 +97,7 @@ const LoginScreen: React.FC = () => {
   const handleSkip = async () => {
     try {
       await AsyncStorage.setItem('loginSkipped', 'true');
-    router.replace('/');
+      router.replace('/');
     } catch (error) {
       console.error('Error skipping login:', error);
     }

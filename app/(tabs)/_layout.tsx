@@ -3,13 +3,13 @@
 import React, { useState, useEffect } from 'react';
 import { Link, Tabs, useRouter, usePathname } from 'expo-router';
 import { Button, useTheme } from 'tamagui';
-import { Atom, AudioWaveform } from '@tamagui/lucide-icons';
-import { ShoppingBag, ShoppingCart, User } from '@tamagui/lucide-icons'; // Updated icons
+import { Home, Tag, ShoppingCart, User } from '@tamagui/lucide-icons';
 import LoginScreen from 'app/Auth/login';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StyleSheet, View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native'; 
 import { useAuth } from 'app/context/AuthContext';
+import 'react-native-reanimated'; 
 
 export default function TabLayout() {
   const [loginSkipped, setLogginSkiped] = useState(false);
@@ -18,11 +18,10 @@ export default function TabLayout() {
   const theme = useTheme();
   const router = useRouter();
   const pathname = usePathname(); 
-  const {isAuthenticated } = useAuth()
+  const { isAuthenticated } = useAuth();
 
   const showButtonPaths = [
     '/',          
-    // '/profile', 
     '/offer'      
   ];
 
@@ -72,7 +71,7 @@ export default function TabLayout() {
     );
   }
 
-  if (!isAuthenticated  || !loginSkipped) {
+  if (!isAuthenticated || !loginSkipped) {
     return <LoginScreen />;
   }
 
@@ -80,14 +79,16 @@ export default function TabLayout() {
     <View style={{ flex: 1 }}>
       <Tabs
         screenOptions={{
-          tabBarActiveTintColor: theme.red10.val,
+          tabBarActiveTintColor: '#10b981', // Tailwind green for accent
           tabBarStyle: {
-            backgroundColor: theme.background.val,
-            borderTopColor: theme.borderColor.val,
+            backgroundColor: '#fff',
+            borderTopColor: '#e0e0e0',
           },
-          headerShown: false, 
+          headerShown: false,
           tabBarLabelStyle: {
-            color: theme.color.val,
+            color: '#111',
+            fontSize: 12,
+            fontWeight: '600',
           }
         }}
       >
@@ -95,15 +96,15 @@ export default function TabLayout() {
           name="index"
           options={{
             title: 'Order',
-            tabBarIcon: ({ color }) => <ShoppingBag  color={color} />,
+            tabBarIcon: ({ color }) => <Home color={color} />,
           }}
         />
 
-      <Tabs.Screen
+        <Tabs.Screen
           name="offers"
           options={{
             title: 'Offers',
-            tabBarIcon: ({ color }) => <User color={color} />,
+            tabBarIcon: ({ color }) => <Tag color={color} />,
           }}
         />
 
@@ -122,12 +123,11 @@ export default function TabLayout() {
             tabBarIcon: ({ color }) => <User color={color} />,
           }}
         />
-      
       </Tabs>
 
       {/* Sticky View Cart Button */}
       {cartCount > 0 && showButtonPaths.includes(pathname) && (
-        <Link href='/cart/cart' asChild>
+        <Link href='/(tabs)/cart' asChild>
           <TouchableOpacity
             style={styles.stickyButton}
             activeOpacity={0.8}
@@ -146,25 +146,22 @@ export default function TabLayout() {
 const styles = StyleSheet.create({
   stickyButton: {
     position: 'absolute',
-    bottom: 60, // Adjust the bottom position as needed
-    left: 0,
-    right: 0,
+    bottom: 60,
+    left: 20,
+    right: 20,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#10b981', // Tailwind's green-500
+    backgroundColor: '#10b981', // Tailwind green
     paddingVertical: 10,
     paddingHorizontal: 20,
-    // borderTopLeftRadius: 12,
-    // borderTopRightRadius: 12,
-    borderRadius : 12,
-    elevation: 5, // For Android shadow
-    shadowColor: '#000', // For iOS shadow
+    borderRadius: 12,
+    elevation: 5,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 3,
     justifyContent: 'center',
-    zIndex: 1000, // Ensure it stays above other elements
-    marginHorizontal :20
+    zIndex: 1000,
   },
   cartText: {
     color: '#fff',

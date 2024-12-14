@@ -107,7 +107,7 @@ const OrderCard: React.FC<{ order: typeof mockOrders[0] }> = ({ order }) => {
 
 function Profile() {
   return (
-    <YStack flex={1} backgroundColor="#f5f7fa" padding="$5">
+    <YStack flex={1} backgroundColor="#f5f7fa" padding="$3">
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Profile Header */}
         <YStack
@@ -272,14 +272,14 @@ function Profile() {
         <YStack
           backgroundColor="#ffffff"
           borderRadius="$4"
-          padding="$5"
+          // padding="$2"
           shadowColor="#000"
           shadowOpacity={0.05}
           shadowRadius={5}
           shadowOffset={{ width: 0, height: 2 }}
           marginBottom="$5"
         >
-          <Text fontSize={20} fontWeight="700" color="#333" marginBottom="$4">
+          <Text fontSize={20} fontWeight="700" color="#333" marginBottom="$4" marginLeft={10} marginTop={10}>
             Past Orders
           </Text>
           {mockOrders.map((order) => (

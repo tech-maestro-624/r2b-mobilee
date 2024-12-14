@@ -377,7 +377,7 @@ export default function Cart() {
             </YStack>
           </Card>
 
-          <Card
+          {/* <Card
             padding={16}
             borderRadius={16}
             backgroundColor="#ffffff"
@@ -400,7 +400,7 @@ export default function Cart() {
                 </XStack>
               </Pressable>
             </YStack>
-          </Card>
+          </Card> */}
 
           {/* Price Breakdown Card */}
           {cartItems.length > 0 && (
