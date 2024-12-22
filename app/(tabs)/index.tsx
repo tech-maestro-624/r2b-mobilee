@@ -9,6 +9,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import AddressSelectionSheet from 'app/cart/AddressSelectionSheet';
 import { TouchableOpacity, View } from 'react-native';
 import { useOrder } from 'app/context/orderContext';
+import { getFile } from 'app/api/flleUploads';
 
 interface Address {
   id: number;
@@ -23,7 +24,8 @@ interface Address {
 interface Restaurant {
   _id: string;
   name: string;
-  image?: string;
+  image?: string;       // This might be an ID for getFile
+  imageUrl?: string;    // We'll store the fetched image here
   rating: number;
   address: string;
   description?: string;
@@ -31,7 +33,7 @@ interface Restaurant {
 
 export default function Index() {
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
-  const [categories, setCategories] = useState([]);
+  const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const { updateOrderState } = useOrder();
 
@@ -39,21 +41,71 @@ export default function Index() {
   const [selectedAddress, setSelectedAddress] = useState<Address | null>(null);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
 
-  const fetchRestaurants = useCallback(async () => {
-    try {
-      const response = await getRestaurant();
-      setRestaurants(response.data.restaurants);
-    } catch (error: any) {
-      console.log('Error fetching restaurants:', error.message);
-    }
-  }, []);
-
+  /**
+   * Fetch categories:
+   * 1) getCategory API call
+   * 2) For each category, fetch actual image from getFile
+   * 3) Store it in category.imageUrl
+   */
   const fetchCategories = useCallback(async () => {
     try {
       const response = await getCategory({ condition: { isGlobal: true } });
-      setCategories(response.data.categories);
+      const categoriesData = response.data.categories; // array of categories
+
+      // For each category, fetch the file if category.image exists
+      const updatedCategories = await Promise.all(
+        categoriesData.map(async (cat: any) => {
+          if (cat.image) {
+            try {
+              const fileResponse = await getFile(cat.image);
+              // fileResponse.data.data should contain the actual image URL or base64 string
+              return { ...cat, imageUrl: fileResponse.data.data };
+            } catch (error) {
+              console.log('Error fetching file for category:', cat._id, error);
+              return cat; // fallback
+            }
+          }
+          return cat;
+        }),
+      );
+
+      setCategories(updatedCategories);
     } catch (error: any) {
-      console.log('Error fetching categories:', error);
+      console.log('Error fetching categories:', error.message);
+    }
+  }, []);
+
+  /**
+   * Fetch restaurants:
+   * 1) getRestaurant API call
+   * 2) For each restaurant, fetch the actual image from getFile
+   * 3) Store it in restaurant.imageUrl
+   */
+  const fetchRestaurants = useCallback(async () => {
+    try {
+      const response = await getRestaurant();
+      const restaurantsData = response.data.restaurants; // array of restaurants
+
+      // For each restaurant, fetch the file if restaurant.image exists
+      const updatedRestaurants: Restaurant[] = await Promise.all(
+        restaurantsData.map(async (rest: Restaurant) => {
+          if (rest.image) {
+            try {
+              const fileResponse = await getFile(rest.image);
+              // fileResponse.data.data should contain the actual image URL or base64 string
+              return { ...rest, imageUrl: fileResponse.data.data };
+            } catch (error) {
+              console.log('Error fetching file for restaurant:', rest._id, error);
+              return rest; // fallback
+            }
+          }
+          return rest;
+        }),
+      );
+
+      setRestaurants(updatedRestaurants);
+    } catch (error: any) {
+      console.log('Error fetching restaurants:', error.message);
     }
   }, []);
 
@@ -105,16 +157,40 @@ export default function Index() {
   );
 
   // Skeleton Components
-  const SkeletonBox = ({ width, height, borderRadius = 4, style = {} }: { width: number | string; height: number; borderRadius?: number; style?: any }) => (
-    <View style={[{ width, height, backgroundColor: '#e0e0e0', borderRadius }, style]} />
+  const SkeletonBox = ({
+    width,
+    height,
+    borderRadius = 4,
+    style = {},
+  }: {
+    width: number | string;
+    height: number;
+    borderRadius?: number;
+    style?: any;
+  }) => (
+    <View
+      style={[
+        { width, height, backgroundColor: '#e0e0e0', borderRadius },
+        style,
+      ]}
+    />
   );
 
-  const SkeletonText = ({ width, height = 10, style = {} }: { width: number | string; height?: number; style?: any }) => (
+  const SkeletonText = ({
+    width,
+    height = 10,
+    style = {},
+  }: {
+    width: number | string;
+    height?: number;
+    style?: any;
+  }) => (
     <SkeletonBox width={width} height={height} borderRadius={4} style={style} />
   );
 
   return (
     <YStack flex={1} backgroundColor="white">
+      {/* Top Header */}
       <XStack
         ai="center"
         jc="space-between"
@@ -126,7 +202,12 @@ export default function Index() {
       >
         <XStack ai="center" f={1}>
           {loading ? (
-            <SkeletonBox width={40} height={40} borderRadius={20} style={{ marginRight: 8 }} />
+            <SkeletonBox
+              width={40}
+              height={40}
+              borderRadius={20}
+              style={{ marginRight: 8 }}
+            />
           ) : (
             <Image
               source={{ uri: 'https://via.placeholder.com/40' }}
@@ -147,8 +228,16 @@ export default function Index() {
           >
             {loading ? (
               <YStack>
-                <SkeletonText width={100} height={14} style={{ marginLeft: 10, marginBottom: 6 }} />
-                <SkeletonText width={140} height={12} style={{ marginLeft: 10 }} />
+                <SkeletonText
+                  width={100}
+                  height={14}
+                  style={{ marginLeft: 10, marginBottom: 6 }}
+                />
+                <SkeletonText
+                  width={140}
+                  height={12}
+                  style={{ marginLeft: 10 }}
+                />
               </YStack>
             ) : (
               <YStack>
@@ -190,6 +279,7 @@ export default function Index() {
         )}
       </XStack>
 
+      {/* Search Bar */}
       <YStack paddingHorizontal="$4" paddingVertical="$3">
         {loading ? (
           <XStack
@@ -199,7 +289,12 @@ export default function Index() {
             borderRadius="$4"
             paddingHorizontal={16}
           >
-            <SkeletonBox width={24} height={24} borderRadius={12} style={{ marginRight: 8 }} />
+            <SkeletonBox
+              width={24}
+              height={24}
+              borderRadius={12}
+              style={{ marginRight: 8 }}
+            />
             <SkeletonText width="60%" height={16} />
           </XStack>
         ) : (
@@ -232,6 +327,7 @@ export default function Index() {
       </YStack>
 
       <ScrollView flex={1}>
+        {/* Categories Section */}
         <YStack paddingBottom="$3" marginTop={10}>
           {loading ? (
             <ScrollView
@@ -266,7 +362,9 @@ export default function Index() {
                   >
                     <YStack alignItems="center" justifyContent="center" space={8}>
                       <Image
-                        source={{ uri: 'https://via.placeholder.com/50' }}
+                        source={{
+                          uri: category.imageUrl || 'https://via.placeholder.com/70',
+                        }}
                         width={70}
                         height={70}
                         borderRadius={35}
@@ -283,13 +381,9 @@ export default function Index() {
           )}
         </YStack>
 
+        {/* Top Rated Restaurants Section */}
         <YStack paddingHorizontal={20} paddingBottom={20}>
-          <Text
-            color="#111818"
-            fontSize={16}
-            fontWeight="700"
-            marginBottom={12}
-          >
+          <Text color="#111818" fontSize={16} fontWeight="700" marginBottom={12}>
             Top Rated
           </Text>
           {loading ? (
@@ -305,7 +399,12 @@ export default function Index() {
                     borderColor="#E0E0E0"
                     padding={12}
                   >
-                    <SkeletonBox width="100%" height={120} borderRadius={8} style={{ marginBottom: 8 }} />
+                    <SkeletonBox
+                      width="100%"
+                      height={120}
+                      borderRadius={8}
+                      style={{ marginBottom: 8 }}
+                    />
                     <SkeletonText width="80%" style={{ marginBottom: 4 }} />
                     <SkeletonText width="50%" style={{ marginBottom: 8 }} />
                     <SkeletonBox width="100%" height={40} borderRadius={4} />
@@ -333,8 +432,8 @@ export default function Index() {
                     <Image
                       source={{
                         uri:
-                          restaurant.image ||
-                          'https://via.placeholder.com/160x120',
+                          // now we use restaurant.imageUrl instead of restaurant.image
+                          restaurant.imageUrl || 'https://via.placeholder.com/160x120',
                       }}
                       width="100%"
                       height={120}
@@ -400,7 +499,13 @@ export default function Index() {
           )}
         </YStack>
 
-        <YStack padding={16} backgroundColor="#f9f9f9" borderTopWidth={1} borderTopColor="#E0E0E0">
+        {/* Explore More Restaurants Section */}
+        <YStack
+          padding={16}
+          backgroundColor="#f9f9f9"
+          borderTopWidth={1}
+          borderTopColor="#E0E0E0"
+        >
           <Text color="#111818" fontSize={16} fontWeight="700" marginBottom={12}>
             Explore More
           </Text>
@@ -420,7 +525,12 @@ export default function Index() {
                   shadowOffset={{ width: 0, height: 1 }}
                 >
                   <XStack alignItems="center">
-                    <SkeletonBox width={90} height={90} borderRadius={8} style={{ marginRight: 12 }} />
+                    <SkeletonBox
+                      width={90}
+                      height={90}
+                      borderRadius={8}
+                      style={{ marginRight: 12 }}
+                    />
                     <YStack flex={1}>
                       <SkeletonText width="80%" style={{ marginBottom: 6 }} />
                       <SkeletonText width="60%" style={{ marginBottom: 6 }} />
@@ -456,7 +566,9 @@ export default function Index() {
                       <XStack alignItems="center">
                         <Image
                           source={{
-                            uri: restaurant.image || 'https://via.placeholder.com/80x80',
+                            uri:
+                              restaurant.imageUrl ||
+                              'https://via.placeholder.com/80x80',
                           }}
                           width={90}
                           height={90}
@@ -464,16 +576,30 @@ export default function Index() {
                           alt={restaurant.name}
                         />
                         <YStack flex={1} paddingHorizontal={12}>
-                          <Text color="#111818" fontSize={14} fontWeight="600" marginBottom={4}>
+                          <Text
+                            color="#111818"
+                            fontSize={14}
+                            fontWeight="600"
+                            marginBottom={4}
+                          >
                             {restaurant.name}
                           </Text>
                           {restaurant.description && (
-                            <Text color="#6b7280" fontSize={12} numberOfLines={2} marginBottom={4}>
+                            <Text
+                              color="#6b7280"
+                              fontSize={12}
+                              numberOfLines={2}
+                              marginBottom={4}
+                            >
                               {restaurant.description}
                             </Text>
                           )}
                           <XStack alignItems="center">
-                            <MaterialIcons name="star" size={14} color="#fbbf24" />
+                            <MaterialIcons
+                              name="star"
+                              size={14}
+                              color="#fbbf24"
+                            />
                             <Text color="#608a8a" fontSize={12} marginLeft={4}>
                               {restaurant.rating.toFixed(1)}
                             </Text>

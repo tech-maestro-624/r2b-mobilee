@@ -60,7 +60,6 @@ export default function Cart() {
         const cartData = await AsyncStorage.getItem('cart');
         if (cartData) {
           const parsedCart = JSON.parse(cartData);
-          console.log(parsedCart);
           setCartItems(parsedCart);
           if (parsedCart.length > 0) {
             const branchId = parsedCart[0].branchId;
@@ -212,8 +211,6 @@ export default function Cart() {
     console.log(orderData);
 
     const response = await createOrder(orderData)
-    console.log(response.data);
-    
     
     } catch (error) {
       console.log('Error placing order:', error);

@@ -1,84 +1,60 @@
-// TabOneScreen.tsx
-
-import React, {useEffect,useCallback, useLayoutEffect, useState} from 'react'
+import React, { useEffect, useCallback, useLayoutEffect, useState } from 'react'
 import { ScrollView } from 'tamagui'
-import { YStack, XStack, Text, Button, Image, Anchor } from 'tamagui'
+import { YStack, XStack, Text, Button, Image } from 'tamagui'
 import Icon from 'react-native-vector-icons/MaterialIcons' 
 import { Link, useLocalSearchParams, useNavigation } from 'expo-router';
 import { getRestaurantByCategory } from 'app/api/restaurant';
 import { useFocusEffect } from 'expo-router';
 import { useOrder } from 'app/context/orderContext';
+import { getFile } from 'app/api/flleUploads';
 
 export default function TabOneScreen() {
-  const [restaurants, setRestaurants] = useState([])
-  const {  categoryId } = useLocalSearchParams();
+  const [restaurants, setRestaurants] = useState([]);
+  const { categoryId } = useLocalSearchParams();
   const { updateOrderState } = useOrder();
+  const navigation = useNavigation();
 
-  const fetchRestaurants = async()=>{
+  /**
+   * 1) Fetch the restaurants by category
+   * 2) For each restaurant that has an `image` field,
+   *    call `getFile` to get the actual image (URL/base64).
+   * 3) Save it as `restaurant.imageUrl`.
+   */
+  const fetchRestaurants = async () => {
     try {
-      const response = await getRestaurantByCategory(categoryId)
-      setRestaurants(response.data.restaurants)
+      const response = await getRestaurantByCategory(categoryId);
+      const fetchedRestaurants = response.data.restaurants;
+
+      // Map over each restaurant, fetch the file if `restaurant.image` exists
+      const updatedRestaurants = await Promise.all(
+        fetchedRestaurants.map(async (r: any) => {
+          if (r.image) {
+            try {
+              const fileResponse = await getFile(r.image);
+              // fileResponse.data.data is presumably the actual image URL/base64
+              return { ...r, imageUrl: fileResponse.data.data };
+            } catch (err) {
+              console.log('Error fetching image for restaurant:', r._id, err);
+              return r; // fallback to original data
+            }
+          } else {
+            return r;
+          }
+        })
+      );
+
+      console.log('Updated Restaurants:', updatedRestaurants);
+      setRestaurants(updatedRestaurants);
     } catch (error) {
-      console.log("error",error)      
+      console.log('Error fetching restaurants:', error);
     }
-  }
+  };
 
   useFocusEffect(
     useCallback(() => {
       fetchRestaurants();
     }, [categoryId])
   );
-
-  // const restaurants = [
-  //   {
-  //     name: " Empanadas",
-  //     rating: '4.1 (100+)',
-  //     status: 'Open · Closes at 9:30 PM',
-  //     image: 'https://via.placeholder.com/150',
-  //     menuItems: [
-  //       {
-  //         name: 'Chicken',
-  //         price: '$2.75',
-  //         image: 'https://via.placeholder.com/150',
-  //       },
-  //       {
-  //         name: 'Chicken',
-  //         price: '$2.75',
-  //         image: 'https://via.placeholder.com/150',
-  //       },
-  //       {
-  //         name: 'Vegetable',
-  //         price: '$2.75',
-  //         image: 'https://via.placeholder.com/150',
-  //       },
-  //     ],
-  //   },
-  //   {
-  //     name: 'Ramen Underground',
-  //     rating: '4.2 (1000+)',
-  //     status: 'Open · Closes at 10:00 PM',
-  //     image: 'https://via.placeholder.com/150',
-  //     menuItems: [
-  //       {
-  //         name: 'Tonkotsu Ramen',
-  //         price: '$12.75',
-  //         image: 'https://via.placeholder.com/150',
-  //       },
-  //       {
-  //         name: 'Shoyu Ramen',
-  //         price: '$12.75',
-  //         image: 'https://via.placeholder.com/150',
-  //       },
-  //       {
-  //         name: 'Yaki Udon',
-  //         price: '$10.75',
-  //         image: 'https://via.placeholder.com/150',
-  //       },
-  //     ],
-  //   },
-  // ]
-
-  const navigation = useNavigation()
 
   useEffect(() => {
     navigation.setOptions({
@@ -95,74 +71,46 @@ export default function TabOneScreen() {
   }, [navigation]);
 
   return (
-    <YStack f={1} bg="#fffffff" mt="$5" >
-      {/* <XStack ai="center" jc="space-between" p="$4" pb="$2">
-  <Button size="$4" bg="transparent" color="#111818"
-    onPress={() => navigation.goBack()} 
-  >
-    <Icon name="arrow-back" size={24} color="#111818" />
-  </Button>
-
-  <Text
-    color="#111818"
-    fontSize="$6"
-    fontWeight="800"
-    ta="center"
-    f={1}
-    pl="$10" 
-  >
-  </Text>
-
-  <Button
-    circular
-    size="$4"
-    bg="transparent"
-    color="#111818"
-    onPress={() => {}}
-  >
-    <Icon name="search" size={24} color="#111818" />
-  </Button>
-</XStack> */}
-
-
-
+    <YStack f={1} bg="#ffffff">
       <ScrollView f={1}>
-        {restaurants && restaurants.map((restaurant, index) => (
+        {restaurants.map((restaurant: any, index: number) => (
           <YStack key={index}>
-            {/* Restaurant Info */}
             <Link
-                        href="/resturantDetails/resturant"
-                        asChild
-                        onPress={() => {
-                          updateOrderState('restaurantId', restaurant?._id);
-                        }}
-                      >
-            <XStack space="$4" px="$4" py="$3">
-              <Image
-                source={{ uri: restaurant.image || 'https://via.placeholder.com/50' }}
-                width={100}
-                height={100}
-                borderRadius="$2"
-              />
-              <YStack f={1} jc="center">
-                <Text color="#111818" fontSize="$5" fontWeight="500">
-                  {restaurant.name}
-                </Text>
-                <Text color="#608a8a" fontSize="$2">
-                  {restaurant.description}
-                </Text>
-                <Text color="#608a8a" fontSize="$2">
-                  {restaurant.rating}
-                </Text>
-                <Text color="#608a8a" fontSize="$2">
-                  {restaurant.status}
-                </Text>
-              </YStack>
-            </XStack>
+              href="/resturantDetails/resturant"
+              asChild
+              onPress={() => {
+                updateOrderState('restaurantId', restaurant?._id);
+              }}
+            >
+              <XStack space="$4" px="$4" py="$3">
+                <Image
+                  source={{
+                    uri: restaurant.imageUrl || 'https://via.placeholder.com/50',
+                  }}
+                  width={100}
+                  height={100}
+                  borderRadius="$2"
+                  alt="Restaurant Image"
+                />
+                <YStack f={1} jc="center">
+                  <Text color="#111818" fontSize="$5" fontWeight="500">
+                    {restaurant.name}
+                  </Text>
+                  <Text color="#608a8a" fontSize="$2">
+                    {restaurant.description}
+                  </Text>
+                  <Text color="#608a8a" fontSize="$2">
+                    {restaurant.rating}
+                  </Text>
+                  <Text color="#608a8a" fontSize="$2">
+                    {restaurant.status}
+                  </Text>
+                </YStack>
+              </XStack>
             </Link>
           </YStack>
         ))}
       </ScrollView>
     </YStack>
-  )
+  );
 }

@@ -8,7 +8,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import AddressSelectionSheet from 'app/cart/AddressSelectionSheet';
 import { useOrder } from 'app/context/orderContext';
-import { createOrder } from 'app/api/order';
+import { createOrder, verifyPayment } from 'app/api/order';
+import RazorpayCheckout from 'react-native-razorpay';
+import { getFile } from 'app/api/flleUploads';
 
 interface Address {
   id: number;
@@ -34,20 +36,18 @@ interface AddOn {
 interface FoodItem {
   id: string;
   name: string;
-  image?: string[];
-  price: number;
+  image?: string[];   // This is an array of image IDs
+  imageUrl?: string;  // We'll store the fetched image here
+  price: number;      // Price is *inclusive* of tax
   quantity: number;
   variant?: Variant;
   addOns?: AddOn[];
   branchId: string;
+  // If you store different tax slabs per item, add something like `taxSlab?: number;`
 }
 
-const SkeletonBox = ({
-  width,
-  height,
-  borderRadius = 4,
-  style = {}
-}: {
+// Skeletons for loading state
+const SkeletonBox = ({ width, height, borderRadius = 4, style = {} }: {
   width: number | string;
   height: number;
   borderRadius?: number;
@@ -56,11 +56,7 @@ const SkeletonBox = ({
   <View style={[{ width, height, backgroundColor: '#e0e0e0', borderRadius }, style]} />
 );
 
-const SkeletonText = ({
-  width,
-  height = 10,
-  style = {}
-}: {
+const SkeletonText = ({ width, height = 10, style = {} }: {
   width: number | string;
   height?: number;
   style?: any;
@@ -78,34 +74,84 @@ export default function Cart() {
   const [cartItems, setCartItems] = useState<FoodItem[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const serviceCharge = 20; 
-  const deliveryCharge = 30;
-  const deliveryTaxRate = 0.18;
-  const deliveryTax = deliveryCharge * deliveryTaxRate;
+  // In your backend logic, you have these possible additional fees.
+  // We'll define them here so you can show them in the UI breakdown:
+  const [packagingCharges, setPackagingCharges] = useState(10);  // example default
+  const [platformFee, setPlatformFee] = useState(5);             // example default
+  const [deliveryTip, setDeliveryTip] = useState(0);             // user-chosen tip
+  const serviceCharge = 20;
   const discount = 10;
-  const taxSlab = 5; 
 
+  // In your backend, delivery charge is "inclusive" of 18% tax,
+  // so you'd extract the tax if you want to show it separated.
+  // But for UI clarity, let's store the "base" plus "tax" separately.
+  const [deliveryCharge, setDeliveryCharge] = useState(30);  // inclusive of 18% tax (example)
+  // If we wanted to do an "extracted" approach, we might do:
+  // const deliveryTax = (deliveryCharge * 18) / (100 + 18);
+  // But we can keep it simple for the client UI.
 
+  // Tax slab for your items. 
+  // If every item is 5% inclusive, we can do a single slab,
+  // or store it per item. We'll assume a single slab for demonstration:
+  const itemTaxSlab = 5;  
+
+  // We'll also define 18% for packaging, platform, etc. 
+  // For your backend you do:
+  //   packagingChargesTax = packagingCharges * 0.18
+  //   platformFeeTax = platformFee * 0.18
+  const packagingTaxRate = 0.18;
+  const platformFeeTaxRate = 0.18;
+
+  /**
+   * 1) Load cart from AsyncStorage
+   * 2) If cart has items -> fetch the branch details
+   * 3) For each item that has an `image` array, call `getFile` to get item.imageUrl
+   */
   const fetchCartItems = async () => {
     try {
       const cartData = await AsyncStorage.getItem('cart');
-      if (cartData) {
-        const parsedCart = JSON.parse(cartData);
-        setCartItems(parsedCart);
-        if (parsedCart.length > 0) {
-          const branchId = parsedCart[0].branchId;
-          if (branchId) {
-            const response1 = await getBranches({ condition: { _id: branchId } });
-            setBranch(response1.data.branches[0]);
-          }
+      if (!cartData) {
+        setCartItems([]);
+        return;
+      }
+      const parsedCart: FoodItem[] = JSON.parse(cartData);
+
+      // If the cart has items, fetch the branch
+      if (parsedCart.length > 0) {
+        const branchId = parsedCart[0].branchId;
+        if (branchId) {
+          const response1 = await getBranches({ condition: { _id: branchId } });
+          setBranch(response1.data.branches[0]);
         }
       }
+
+      // For each item, fetch the actual image (if item.image has at least one ID)
+      const updatedCart = await Promise.all(
+        parsedCart.map(async (item) => {
+          if (Array.isArray(item.image) && item.image.length > 0) {
+            try {
+              const fileResp = await getFile(item.image[0]);
+              return { ...item, imageUrl: fileResp.data.data };
+            } catch (err) {
+              console.log('Error fetching file for cart item', item.id, err);
+              return item; // fallback
+            }
+          }
+          return item; // no images
+        })
+      );
+
+      setCartItems(updatedCart);
     } catch (error) {
       console.log('Error fetching cart items:', error);
     } finally {
       setLoading(false);
     }
   };
+
+  /**
+   * Load addresses from AsyncStorage
+   */
   const fetchAddresses = async () => {
     try {
       const storedAddresses = await AsyncStorage.getItem('addresses');
@@ -136,80 +182,132 @@ export default function Cart() {
     }, [])
   );
 
-
-
   const handleSetSelectedAddress = async (address: Address) => {
     setSelectedAddress(address);
     await AsyncStorage.setItem('selectedAddress', JSON.stringify(address));
   };
 
-  const subTotal = cartItems.reduce(
-    (sum: number, item: FoodItem) => sum + item.price * item.quantity,
-    0
-  );
-  const totalTax = (subTotal * taxSlab) / 100;
-  const grandTotal = subTotal + totalTax + serviceCharge + deliveryCharge + deliveryTax - discount;
-
+  // Increase/decrease item quantity
   const incrementQuantity = async (itemId: string) => {
-    const updatedCartItems = cartItems.map((item) => {
-      if (item.id === itemId) {
-        return { ...item, quantity: item.quantity + 1 };
-      }
-      return item;
-    });
+    const updatedCartItems = cartItems.map((item) =>
+      item.id === itemId ? { ...item, quantity: item.quantity + 1 } : item
+    );
     setCartItems(updatedCartItems);
     await AsyncStorage.setItem('cart', JSON.stringify(updatedCartItems));
   };
-
   const decrementQuantity = async (itemId: string) => {
     const currentItem = cartItems.find((item) => item.id === itemId);
-    if (currentItem) {
-      if (currentItem.quantity > 1) {
-        const updatedCartItems = cartItems.map((cItem) => {
-          if (cItem.id === itemId) {
-            return { ...cItem, quantity: cItem.quantity - 1 };
-          }
-          return cItem;
-        });
-        setCartItems(updatedCartItems);
-        await AsyncStorage.setItem('cart', JSON.stringify(updatedCartItems));
-      } else {
-        const updatedCartItems = cartItems.filter((cItem) => cItem.id !== itemId);
-        setCartItems(updatedCartItems);
-        await AsyncStorage.setItem('cart', JSON.stringify(updatedCartItems));
-      }
+    if (!currentItem) return;
+    if (currentItem.quantity > 1) {
+      const updatedCartItems = cartItems.map((cItem) =>
+        cItem.id === itemId ? { ...cItem, quantity: cItem.quantity - 1 } : cItem
+      );
+      setCartItems(updatedCartItems);
+      await AsyncStorage.setItem('cart', JSON.stringify(updatedCartItems));
+    } else {
+      // Remove item if quantity goes below 1
+      const updatedCartItems = cartItems.filter((cItem) => cItem.id !== itemId);
+      setCartItems(updatedCartItems);
+      await AsyncStorage.setItem('cart', JSON.stringify(updatedCartItems));
     }
   };
 
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      headerShown: false,
-    });
-  }, [navigation]);
+  /**
+   * Mimicking your backend logic:
+   *  For each item:
+   *   - itemPrice = item.price * item.quantity (inclusive of tax)
+   *   - itemTax = itemPrice * itemTaxSlab / (100 + itemTaxSlab)
+   *   - itemSubtotal = itemPrice  (since it's inclusive)
+   *
+   * Then sum them all up to get subTotal and totalTax, etc.
+   */
+  const itemsWithCalc = cartItems.map((item) => {
+    // If you store a custom taxSlab on each item, use item.taxSlab. 
+    // For now, using a single global itemTaxSlab
+    const itemPrice = item.price * item.quantity;
+    const itemTax = (itemPrice * itemTaxSlab) / (100 + itemTaxSlab);
+    return {
+      ...item,
+      itemPrice,
+      itemTax,
+    };
+  });
 
-  useFocusEffect(
-    React.useCallback(() => {
-      const onBackPress = () => {
-        router.replace('/resturantDetails/resturant');
-        updateOrderState('restaurantId', branch?.restaurant?._id);
-        return true;
-      };
-      BackHandler.addEventListener('hardwareBackPress', onBackPress);
-      return () => {
-        BackHandler.removeEventListener('hardwareBackPress', onBackPress);
-      };
-    }, [router, branch])
-  );
+  // Subtotal = sum of itemPrice (which is tax-inclusive)
+  const subTotal = itemsWithCalc.reduce((sum, i) => sum + i.itemPrice, 0);
 
+  // totalTax = sum of itemTax across all items
+  const totalItemTax = itemsWithCalc.reduce((sum, i) => sum + i.itemTax, 0);
+
+  // Now handle packaging charges, platform fee, etc.
+  // In your code, packagingChargesTax = packagingCharges * 0.18
+  const packagingChargesTax = packagingCharges * packagingTaxRate;
+  // platformFeeTax = platformFee * 0.18
+  const actualPlatformFeeTax = platformFee * platformFeeTaxRate;
+
+  // If your "deliveryCharge" is also inclusive of 18% tax, 
+  // you can do something similar to "extraction"—but let's keep it simple. 
+  // We'll show it as a single line item in the UI. 
+  // Or if you want to separate the tax, you can do:
+  //   const deliveryChargeTax = (deliveryCharge * 18) / (100 + 18)
+  // For demonstration, let's do a single line item for "Delivery Charge."
+
+  // Final grand total
+  // from your backend logic:
+  // grandTotal =
+  //   subTotal +
+  //   totalTax  (the sum of item taxes, but itemPrice was inclusive, so be careful)
+  //   packagingCharges +
+  //   packagingChargesTax +
+  //   serviceCharge +
+  //   platformFee +
+  //   platformFeeTax
+  //   + deliveryTip (if you want to apply tip here)
+  //   + (deliveryCharge) // if you want to add it
+  //   - discount;
+  //
+  // BUT since each item price already included the item tax, you typically wouldn't
+  // add "totalItemTax" *again*. (Because subTotal is already tax-included.)
+  // If you want to display itemTax, that's okay for the breakdown, but we usually
+  // don't add it *again* to the total. 
+  //
+  // For demonstration, let's do it as your server code: items are inclusive,
+  // but you still keep track of that tax portion. 
+  // (You wouldn’t double-add `totalItemTax` to the final total.)
+  //
+  // We'll do:
+  // subTotal (already includes item taxes)
+  // + packagingCharges + packagingChargesTax
+  // + serviceCharge
+  // + platformFee + platformFeeTax
+  // + deliveryCharge (assuming it’s inclusive or you’re just showing it as a single charge)
+  // + deliveryTip
+  // - discount
+  //
+
+  const grandTotal =
+    subTotal +
+    packagingCharges +
+    packagingChargesTax +
+    serviceCharge +
+    platformFee +
+    actualPlatformFeeTax +
+    deliveryCharge +
+    deliveryTip -
+    discount;
+
+  /**
+   * Payment Flow
+   */
   const placeOrderFunc = async () => {
     try {
       const orderData = {
         branch: cartItems[0]?.branchId,
         items: cartItems.map((item) => ({
           _id: item.id,
-          price: item.price,
+          price: item.price, // inclusive
           quantity: item.quantity,
-          taxSlab,
+          taxSlab: itemTaxSlab, // or item-specific slab
           addOns: item.addOns || [],
           variant: item.variant
             ? {
@@ -218,28 +316,106 @@ export default function Cart() {
                 price: item.variant.price,
               }
             : null,
-          options: []
+          options: [],
         })),
-        paymentMethod: 'COD',
+        paymentMethod: 'COD', 
         orderType: 'Delivery',
         discount,
         serviceCharge,
-        deliveryCharge
+        deliveryCharge,
+        // plus if you want to send packagingCharges, platformFee, etc. to the backend:
+        packagingCharges,
+        platformFee,
+        deliveryTip,
       };
 
-      console.log(orderData);
 
       const response = await createOrder(orderData);
-      console.log(response.data);
+      const { razorpayOrderId, amount, currency } = response.data.paymentInitData || {};
+
+      if (razorpayOrderId) {
+        openRazorpayCheckout(razorpayOrderId, amount, currency);
+      } else {
+        alert('Failed to initiate payment. Please try again.');
+      }
     } catch (error) {
       console.log('Error placing order:', error);
       alert('Error placing order');
     }
   };
 
+  const openRazorpayCheckout = (razorpayOrderId: string, amount: number, currency: string) => {
+    const options = {
+      description: 'Payment for your order',
+      image: 'https://i0.wp.com/roll2bowltechnologies.com/wp-content/uploads/2023/08/Untitled_Artwork.png',
+      currency: currency,
+      key: 'rzp_test_LKwcKdhRp0mq9f', // Replace with your Razorpay Key ID
+      amount: amount,
+      order_id: razorpayOrderId,
+      name: 'Roll2Bowl Technologies',
+      theme: { color: '#53a20e' },
+    };
+
+    RazorpayCheckout.open(options)
+      .then(async (data) => {
+        // Payment success
+        const { razorpay_payment_id, razorpay_signature, razorpay_order_id } = data;
+        try {
+          const verifyResponse = await verifyPayment({
+            razorpayPaymentId: razorpay_payment_id,
+            razorpayOrderId: razorpay_order_id,
+            razorpaySignature: razorpay_signature
+          });
+          if (verifyResponse.status === 200) {
+            // Payment verified
+            // router.push('/orderSuccess');
+          } else {
+            alert('Payment verification failed.');
+          }
+        } catch (error) {
+          console.log('Error verifying payment:', error);
+          alert('Error verifying payment');
+        }
+      })
+      .catch((error) => {
+        // Payment failed or cancelled
+        console.log('Razorpay Error:', error);
+        alert('Payment failed or was cancelled. Please try again.');
+      });
+  };
+
+  /**
+   * Hide default header
+   */
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerShown: false,
+    });
+  }, [navigation]);
+
+  /**
+   * Overriding the back button to go back to 'resturantDetails/resturant'
+   */
+  useFocusEffect(
+    React.useCallback(() => {
+      const onBackPress = () => {
+        router.replace('/resturantDetails/resturant');
+        updateOrderState('restaurantId', branch?.restaurant?._id);
+        return true; // Prevent default back
+      };
+      BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => {
+        BackHandler.removeEventListener('hardwareBackPress', onBackPress);
+      };
+    }, [router, branch])
+  );
+
+  /**
+   * UI Rendering
+   */
   return (
     <YStack flex={1} backgroundColor="#f0f2f5">
-      {/* Conditionally show the top section only if not loading and cart not empty */}
+      {/* Top section if not loading and cart not empty */}
       {loading ? (
         <YStack
           paddingHorizontal={20}
@@ -287,57 +463,37 @@ export default function Cart() {
         </YStack>
       ) : null}
 
+      {/* Main Content */}
       {loading ? (
+        // Loading skeleton
         <ScrollView>
           <YStack paddingHorizontal={5} paddingTop={20} space={16}>
             <Card padding={16} backgroundColor="#ffffff">
               {[...Array(2)].map((_, idx) => (
-                <XStack
-                  key={idx}
-                  space={8}
-                  alignItems="flex-start"
-                  marginVertical={4}
-                >
+                <XStack key={idx} space={8} alignItems="flex-start" marginVertical={4}>
                   <SkeletonBox width={70} height={70} borderRadius={12} />
                   <YStack flex={1} space={4}>
                     <SkeletonText width="60%" style={{ marginBottom: 4 }} />
                     <SkeletonText width="40%" style={{ marginBottom: 4 }} />
                   </YStack>
                   <YStack alignItems="flex-end">
-                    <SkeletonBox width={70} height={20} borderRadius={4} style={{ marginBottom: 8 }} />
+                    <SkeletonBox
+                      width={70}
+                      height={20}
+                      borderRadius={4}
+                      style={{ marginBottom: 8 }}
+                    />
                     <SkeletonText width={50} />
                   </YStack>
                 </XStack>
               ))}
             </Card>
-
-            <Card padding={16} backgroundColor="#ffffff">
-              <SkeletonText width="40%" style={{ marginBottom: 12 }} />
-              <XStack space={8}>
-                <SkeletonBox width={50} height={30} />
-                <SkeletonBox width={50} height={30} />
-                <SkeletonBox width={50} height={30} />
-                <SkeletonBox width={50} height={30} />
-              </XStack>
-            </Card>
-
-            <Card padding={16} backgroundColor="#ffffff">
-              {[...Array(6)].map((_, idx) => (
-                <XStack justifyContent="space-between" key={idx} marginVertical={4}>
-                  <SkeletonText width="30%" />
-                  <SkeletonText width="20%" />
-                </XStack>
-              ))}
-            </Card>
+            {/* ... more skeletons if needed ... */}
           </YStack>
         </ScrollView>
       ) : cartItems.length === 0 ? (
-        // Empty cart UI: Encouraging the user to order
+        // Empty cart
         <YStack flex={1} alignItems="center" justifyContent="center" paddingHorizontal={20}>
-          {/* <Image
-            source={{ uri: 'https://via.placeholder.com/150x150?text=No+Food' }}
-            style={{ width: 150, height: 150, marginBottom: 20, opacity: 0.8 }}
-          /> */}
           <Text fontSize={20} fontWeight="700" color="#1f2937" textAlign="center" marginBottom={8}>
             Your cart is empty
           </Text>
@@ -360,6 +516,7 @@ export default function Cart() {
           </XStack>
         </YStack>
       ) : (
+        // CART ITEMS
         <>
           <ScrollView>
             <YStack paddingHorizontal={5} paddingTop={20} space={16}>
@@ -371,12 +528,17 @@ export default function Cart() {
                     alignItems="flex-start"
                     marginVertical={4}
                   >
+                    {/* Display the fetched imageUrl if available */}
+                    <Image
+                      source={{ uri: item.imageUrl || 'https://via.placeholder.com/70' }}
+                      style={{ width: 70, height: 70, borderRadius: 8 }}
+                    />
                     <YStack flex={1} space={4}>
                       <Text fontSize={12} fontWeight="700" color="#1f2937">
                         {item.name}
                       </Text>
                       {item.variant && (
-                        <Text fontSize={8} color="#6b7280">
+                        <Text fontSize={10} color="#6b7280">
                           {item.variant.label}
                         </Text>
                       )}
@@ -430,22 +592,22 @@ export default function Cart() {
                 ))}
               </Card>
 
+              {/* Tip / Additional UI */}
               <Card padding={16} backgroundColor="#ffffff">
                 <YStack space={12}>
                   <Text fontSize={14} fontWeight="600" color="#1f2937">
                     Leave a Tip
                   </Text>
-                  <XStack>
-                    {[10, 20, 30].map((amount) => (
+                  <XStack space={8}>
+                    {[10, 20, 30, 40].map((amount) => (
                       <Pressable
                         key={amount}
-                        onPress={() => {}}
+                        onPress={() => setDeliveryTip(amount)}
                         style={{
-                          backgroundColor: '#e5e7eb',
+                          backgroundColor: deliveryTip === amount ? '#dbeafe' : '#e5e7eb',
                           borderRadius: 4,
                           paddingVertical: 8,
-                          paddingHorizontal: 12,
-                          marginRight: 4,
+                          paddingHorizontal: 12, marginRight :10
                         }}
                       >
                         <Text fontSize={12} color="#1f2937">
@@ -454,7 +616,7 @@ export default function Cart() {
                       </Pressable>
                     ))}
                     <Pressable
-                      onPress={() => {}}
+                      onPress={() => setDeliveryTip(0)}
                       style={{
                         backgroundColor: '#e5e7eb',
                         borderRadius: 4,
@@ -467,90 +629,134 @@ export default function Cart() {
                       </Text>
                     </Pressable>
                   </XStack>
+                  {deliveryTip > 0 && (
+                    <Text fontSize={12} color="#6b7280">
+                      You've added a ₹{deliveryTip} tip
+                    </Text>
+                  )}
                 </YStack>
               </Card>
 
-              {cartItems.length > 0 && (
-                <Card
-                  padding={16}
-                  backgroundColor="#ffffff"
-                  borderRadius={8}
-                  shadowColor="#000"
-                  shadowOpacity={0.05}
-                  shadowRadius={10}
-                  shadowOffset={{ width: 0, height: 2 }}
-                >
-                  <YStack space={8}>
-                    <XStack justifyContent="space-between">
-                      <Text fontSize={14} color="#1f2937">
-                        Subtotal
-                      </Text>
-                      <Text fontSize={14} color="#1f2937">
-                        ₹{subTotal.toFixed(2)}
-                      </Text>
-                    </XStack>
+              {/* Final Cost Breakdown */}
+              <Card
+                padding={16}
+                backgroundColor="#ffffff"
+                borderRadius={8}
+                shadowColor="#000"
+                shadowOpacity={0.05}
+                shadowRadius={10}
+                shadowOffset={{ width: 0, height: 2 }}
+              >
+                <YStack space={8}>
+                  <XStack justifyContent="space-between">
+                    <Text fontSize={14} color="#1f2937">
+                      Subtotal (items)
+                    </Text>
+                    <Text fontSize={14} color="#1f2937">
+                      ₹{subTotal.toFixed(2)}
+                    </Text>
+                  </XStack>
 
-                    <XStack justifyContent="space-between">
-                      <Text fontSize={14} color="#1f2937">
-                        Tax ({taxSlab}%)
-                      </Text>
-                      <Text fontSize={14} color="#1f2937">
-                        ₹{totalTax.toFixed(2)}
-                      </Text>
-                    </XStack>
+                  {/* If you'd like to show item tax portion separately: */}
+                  <XStack justifyContent="space-between">
+                    <Text fontSize={14} color="#1f2937">
+                      Item Tax Extracted
+                    </Text>
+                    <Text fontSize={14} color="#1f2937">
+                      ₹{totalItemTax.toFixed(2)}
+                    </Text>
+                  </XStack>
 
-                    <XStack justifyContent="space-between">
-                      <Text fontSize={14} color="#1f2937">
-                        Service Charge
-                      </Text>
-                      <Text fontSize={14} color="#1f2937">
-                        ₹{serviceCharge.toFixed(2)}
-                      </Text>
-                    </XStack>
+                  <XStack justifyContent="space-between">
+                    <Text fontSize={14} color="#1f2937">
+                      Packaging Charges
+                    </Text>
+                    <Text fontSize={14} color="#1f2937">
+                      ₹{packagingCharges.toFixed(2)}
+                    </Text>
+                  </XStack>
 
-                    <XStack justifyContent="space-between">
-                      <Text fontSize={14} color="#1f2937">
-                        Delivery Charge
-                      </Text>
-                      <Text fontSize={14} color="#1f2937">
-                        ₹{deliveryCharge.toFixed(2)}
-                      </Text>
-                    </XStack>
+                  <XStack justifyContent="space-between">
+                    <Text fontSize={14} color="#1f2937">
+                      Packaging Tax (18%)
+                    </Text>
+                    <Text fontSize={14} color="#1f2937">
+                      ₹{packagingChargesTax.toFixed(2)}
+                    </Text>
+                  </XStack>
 
-                    <XStack justifyContent="space-between">
-                      <Text fontSize={14} color="#1f2937">
-                        Delivery Tax (18%)
-                      </Text>
-                      <Text fontSize={14} color="#1f2937">
-                        ₹{deliveryTax.toFixed(2)}
-                      </Text>
-                    </XStack>
+                  <XStack justifyContent="space-between">
+                    <Text fontSize={14} color="#1f2937">
+                      Service Charge
+                    </Text>
+                    <Text fontSize={14} color="#1f2937">
+                      ₹{serviceCharge.toFixed(2)}
+                    </Text>
+                  </XStack>
 
-                    <XStack justifyContent="space-between">
-                      <Text fontSize={14} color="#1f2937">
-                        Discount
-                      </Text>
-                      <Text fontSize={14} color="#1f2937">
-                        -₹{discount.toFixed(2)}
-                      </Text>
-                    </XStack>
+                  <XStack justifyContent="space-between">
+                    <Text fontSize={14} color="#1f2937">
+                      Platform Fee
+                    </Text>
+                    <Text fontSize={14} color="#1f2937">
+                      ₹{platformFee.toFixed(2)}
+                    </Text>
+                  </XStack>
 
+                  <XStack justifyContent="space-between">
+                    <Text fontSize={14} color="#1f2937">
+                      Platform Fee Tax (18%)
+                    </Text>
+                    <Text fontSize={14} color="#1f2937">
+                      ₹{actualPlatformFeeTax.toFixed(2)}
+                    </Text>
+                  </XStack>
+
+                  <XStack justifyContent="space-between">
+                    <Text fontSize={14} color="#1f2937">
+                      Delivery Charge
+                    </Text>
+                    <Text fontSize={14} color="#1f2937">
+                      ₹{deliveryCharge.toFixed(2)}
+                    </Text>
+                  </XStack>
+
+                  {deliveryTip > 0 && (
                     <XStack justifyContent="space-between">
-                      <Text fontSize={16} fontWeight="700" color="#1f2937">
-                        Grand Total
+                      <Text fontSize={14} color="#1f2937">
+                        Tip
                       </Text>
-                      <Text fontSize={16} fontWeight="700" color="#1f2937">
-                        ₹{grandTotal.toFixed(2)}
+                      <Text fontSize={14} color="#1f2937">
+                        ₹{deliveryTip.toFixed(2)}
                       </Text>
                     </XStack>
-                  </YStack>
-                </Card>
-              )}
+                  )}
+
+                  <XStack justifyContent="space-between">
+                    <Text fontSize={14} color="#1f2937">
+                      Discount
+                    </Text>
+                    <Text fontSize={14} color="#1f2937">
+                      -₹{discount.toFixed(2)}
+                    </Text>
+                  </XStack>
+
+                  <XStack justifyContent="space-between" marginTop="$2">
+                    <Text fontSize={16} fontWeight="700" color="#1f2937">
+                      Grand Total
+                    </Text>
+                    <Text fontSize={16} fontWeight="700" color="#1f2937">
+                      ₹{grandTotal.toFixed(2)}
+                    </Text>
+                  </XStack>
+                </YStack>
+              </Card>
             </YStack>
           </ScrollView>
         </>
       )}
 
+      {/* Address Selection Bottom Sheet */}
       <AddressSelectionSheet
         isOpen={isSheetOpen}
         onOpenChange={setIsSheetOpen}
@@ -559,9 +765,11 @@ export default function Cart() {
         setSelectedAddress={handleSetSelectedAddress}
       />
 
+      {/* Footer: Place Order */}
       {cartItems.length > 0 && !loading && (
         <YStack
-          padding={20}
+          paddingHorizontal={20}
+          paddingVertical={10}
           backgroundColor="#ffffff"
           borderTopWidth={1}
           borderColor="#e5e7eb"

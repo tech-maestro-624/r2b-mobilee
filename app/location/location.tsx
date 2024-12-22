@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useLayoutEffect } from 'react';
+import React, { useState, useEffect, useLayoutEffect } from "react";
 import {
   YStack,
   XStack,
@@ -7,14 +7,14 @@ import {
   Input,
   Sheet,
   ScrollView,
-} from 'tamagui';
-import { MapPin, ChevronLeft } from '@tamagui/lucide-icons';
-import { Pressable, Alert, ActivityIndicator, StyleSheet } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import MapView, { UrlTile } from 'react-native-maps';
-import * as Location from 'expo-location';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { debounce } from 'lodash';
+} from "tamagui";
+import { MapPin, ChevronLeft } from "@tamagui/lucide-icons";
+import { Pressable, Alert, ActivityIndicator, StyleSheet } from "react-native";
+import { useNavigation } from "@react-navigation/native";
+import MapView, { UrlTile } from "react-native-maps";
+import * as Location from "expo-location";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { debounce } from "lodash";
 
 export default function ConfirmDeliveryLocation() {
   const navigation = useNavigation();
@@ -22,10 +22,10 @@ export default function ConfirmDeliveryLocation() {
   const [currentRegion, setCurrentRegion] = useState(null);
   const [selectedLocation, setSelectedLocation] = useState(null);
   const [hasLocationPermission, setHasLocationPermission] = useState(false);
-  const [addressType, setAddressType] = useState('Home');
+  const [addressType, setAddressType] = useState("Home");
   const [addressDetails, setAddressDetails] = useState({
-    flatNumber: '',
-    landmark: '',
+    flatNumber: "",
+    landmark: "",
   });
   const [isLoading, setIsLoading] = useState(true);
 
@@ -38,10 +38,10 @@ export default function ConfirmDeliveryLocation() {
   useEffect(() => {
     (async () => {
       let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
+      if (status !== "granted") {
         Alert.alert(
-          'Permission Denied',
-          'Location permission is required to use this feature.'
+          "Permission Denied",
+          "Location permission is required to use this feature."
         );
         setIsLoading(false);
         return;
@@ -68,10 +68,10 @@ export default function ConfirmDeliveryLocation() {
   const handleUseCurrentLocation = async () => {
     if (!hasLocationPermission) {
       let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
+      if (status !== "granted") {
         Alert.alert(
-          'Permission Denied',
-          'Location permission is required to use this feature.'
+          "Permission Denied",
+          "Location permission is required to use this feature."
         );
         return;
       }
@@ -94,12 +94,12 @@ export default function ConfirmDeliveryLocation() {
 
   const handleConfirmAddress = async () => {
     if (!addressDetails.flatNumber.trim()) {
-      Alert.alert('Validation Error', 'Please enter your flat/house number.');
+      Alert.alert("Validation Error", "Please enter your flat/house number.");
       return;
     }
 
     try {
-      const storedAddresses = await AsyncStorage.getItem('addresses');
+      const storedAddresses = await AsyncStorage.getItem("addresses");
       let addresses = storedAddresses ? JSON.parse(storedAddresses) : [];
 
       const newAddress = {
@@ -107,7 +107,7 @@ export default function ConfirmDeliveryLocation() {
         name: addressType,
         address:
           addressDetails.flatNumber +
-          (addressDetails.landmark ? ', ' + addressDetails.landmark : ''),
+          (addressDetails.landmark ? ", " + addressDetails.landmark : ""),
         type: addressType,
         latitude: selectedLocation.latitude,
         longitude: selectedLocation.longitude,
@@ -115,14 +115,17 @@ export default function ConfirmDeliveryLocation() {
 
       addresses.push(newAddress);
 
-      await AsyncStorage.setItem('addresses', JSON.stringify(addresses));
-      await AsyncStorage.setItem('selectedAddress', JSON.stringify(newAddress));
+      await AsyncStorage.setItem("addresses", JSON.stringify(addresses));
+      await AsyncStorage.setItem("selectedAddress", JSON.stringify(newAddress));
 
       setIsSheetOpen(false);
       navigation.goBack();
     } catch (error) {
-      console.error('Error saving address:', error);
-      Alert.alert('Error', 'There was an issue saving your address. Please try again.');
+      console.error("Error saving address:", error);
+      Alert.alert(
+        "Error",
+        "There was an issue saving your address. Please try again."
+      );
     }
   };
 
@@ -135,7 +138,12 @@ export default function ConfirmDeliveryLocation() {
 
   if (isLoading) {
     return (
-      <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor="#ffffff">
+      <YStack
+        flex={1}
+        justifyContent="center"
+        alignItems="center"
+        backgroundColor="#ffffff"
+      >
         <ActivityIndicator size="large" color="#10b981" />
       </YStack>
     );
@@ -165,10 +173,9 @@ export default function ConfirmDeliveryLocation() {
           <MapView
             style={{ flex: 1 }}
             initialRegion={currentRegion}
-            provider={null}
             // Do not specify a provider, or set `provider={null}`.
             // Set mapType to 'none' so that no default map is rendered.
-            mapType="none"
+            // mapType="none"
             onRegionChangeComplete={handleRegionChangeComplete}
             showsUserLocation
           >
@@ -178,7 +185,6 @@ export default function ConfirmDeliveryLocation() {
               maximumZ={19}
               flipY={false}
               tileSize={256}
-              shouldReplaceMapContent={true}
             />
           </MapView>
         )}
@@ -236,13 +242,13 @@ export default function ConfirmDeliveryLocation() {
                   Save Address As
                 </Text>
                 <XStack space={12}>
-                  {['Home', 'Work', 'Other'].map((type) => (
+                  {["Home", "Work", "Other"].map((type) => (
                     <Pressable
                       key={type}
                       onPress={() => setAddressType(type)}
                       style={{
                         backgroundColor:
-                          addressType === type ? '#e0f2fe' : '#e5e7eb',
+                          addressType === type ? "#e0f2fe" : "#e5e7eb",
                         paddingVertical: 12,
                         paddingHorizontal: 24,
                         borderRadius: 8,
@@ -251,7 +257,7 @@ export default function ConfirmDeliveryLocation() {
                       <Text
                         fontSize={16}
                         color="#1f2937"
-                        fontWeight={addressType === type ? '700' : '500'}
+                        fontWeight={addressType === type ? "700" : "500"}
                       >
                         {type}
                       </Text>
@@ -308,13 +314,13 @@ const styles = StyleSheet.create({
     marginTop: -48,
   },
   currentLocationButton: {
-    position: 'absolute',
+    position: "absolute",
     bottom: 120,
     right: 20,
-    backgroundColor: '#ffffff',
+    backgroundColor: "#ffffff",
     padding: 10,
     borderRadius: 50,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOpacity: 0.1,
     shadowRadius: 5,
     shadowOffset: { width: 0, height: 2 },

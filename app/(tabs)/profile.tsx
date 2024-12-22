@@ -18,6 +18,7 @@ import {
   Entypo,
 } from '@expo/vector-icons';
 import { Link } from 'expo-router';
+import { getOrder } from 'app/api/order';
 
 // Mock Data
 const mockUser = {
@@ -106,6 +107,15 @@ const OrderCard: React.FC<{ order: typeof mockOrders[0] }> = ({ order }) => {
 };
 
 function Profile() {
+
+  const fetchOrder = async()=>{
+    try {
+      const response = await getOrder({condition : {customer : User._id}})
+      
+    } catch (error) {
+      
+    }
+  }
   return (
     <YStack flex={1} backgroundColor="#f5f7fa" padding="$3">
       <ScrollView showsVerticalScrollIndicator={false}>

@@ -9,4 +9,20 @@ const createOrder = async(data={})=>{
     }
 }
 
-export { createOrder }
+const getOrder = async(params) =>{
+    try {
+        const response = await apiClient().get('/order', {params : params})
+        return response;
+    } catch (error) {
+        throw error;
+    }
+}
+const verifyPayment = async(data) => {
+    try {
+        const response = await apiClient().post('/payment/verify',data)
+        return response
+    } catch (error) {
+        throw error
+    }
+}
+export { createOrder, verifyPayment, getOrder}
