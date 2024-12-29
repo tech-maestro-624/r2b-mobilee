@@ -1,73 +1,93 @@
-// RestaurantMenu.tsx
+// app/restaurantMenu/RestaurantMenu.tsx
 
-import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useLayoutEffect,
+  useCallback,
+} from 'react'
 import {
   View,
-  Text,
-  Image,
-  ScrollView,
-  Pressable,
   Alert,
-  TouchableOpacity,
+  BackHandler,
   LayoutAnimation,
   Platform,
   UIManager,
-  StyleSheet,
+  ScrollView,
   Dimensions,
-  BackHandler,
-} from 'react-native';
-import { YStack, XStack } from 'tamagui';
-import { AntDesign, Feather } from '@expo/vector-icons';
-import { Link, useNavigation, useFocusEffect, useRouter } from 'expo-router';
-import { useOrder } from 'app/context/orderContext';
-import { getRestaurantById } from 'app/api/restaurant';
-import { getBranches } from 'app/api/branch';
-import { getFoodItems } from 'app/api/foodItem';
-import AddToCartSheet from './AddToCartSheet';
-import BranchSelectionSheet from './BranchSelectionSheet';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getFile } from 'app/api/flleUploads';
+} from 'react-native'
+import { useNavigation, useRouter } from 'expo-router'
+import { useOrder } from 'app/context/orderContext'
+import AsyncStorage from '@react-native-async-storage/async-storage'
+import { getFile } from 'app/api/flleUploads'
+import { getRestaurantById } from 'app/api/restaurant'
+import { getBranches } from 'app/api/branch'
+import { getFoodItems } from 'app/api/foodItem'
 
+// Child sheets
+import AddToCartSheet from './AddToCartSheet'
+import BranchSelectionSheet from './BranchSelectionSheet'
+
+// Our separate components
+// import HeaderSection from './components/HeaderSection'
+import HeaderSection from './elements/HeaderSection'
+// import RestaurantHeader from './components/RestaurantHeader'
+import RestaurantHeader from './elements/RestaurantHeader'
+// import BranchSelector from './components/BranchSelector'
+// import BranchSelectionSheet from './BranchSelectionSheet'
+import BranchSelector from './elements/BranchSelector'
+// import DeliveryPickupToggle from './components/DeliveryPickupToggle'
+import DeliveryPickupToggle from './elements/DeliveryPickupToggle'
+// import FilterMenu from './components/FilterMenu'
+import FilterMenu from './elements/FilterMenu'
+// import FoodItemsList from './components/FoodItemsList'
+import FoodItemsList from './elements/FoodItemsList'
+// import CartButton from './components/CartButton'
+import CartButton from './elements/CartButton'
+
+/** ----- Types & Interfaces (same as you had) ----- */
 interface Variant {
-  _id: string;
-  label: string;
-  price: number;
+  _id: string
+  label: string
+  price: number
 }
 
 interface AddOn {
-  _id: string;
-  name: string;
-  price: number;
+  _id: string
+  name: string
+  price: number
 }
 
 interface MenuItem {
-  _id: string;
-  name: string;
-  price?: number;
-  description: string;
-  image: string;       // The original "image" field
-  imageUrl?: string;   // We'll store the fetched image result here
-  category: { name: string };
-  variants?: Variant[];
-  addOns?: AddOn[];
-  isAvailable: boolean;
-  hasVariants?: boolean;
+  _id: string
+  name: string
+  price?: number
+  description: string
+  image: string[] | string
+  imageUrl?: string
+  category: { _id: string; name: string }
+  variants?: Variant[]
+  addOns?: AddOn[]
+  isAvailable: boolean
+  hasVariants?: boolean
 }
 
 interface CartItem {
-  id: string;
-  name: string;
-  image: string;       // Original image field or reference
-  price: number;
-  quantity: number;
-  variant?: Variant;
-  addOns?: AddOn[];
-  branchId: string;
+  id: string
+  name: string
+  image: string[] | string
+  imageUrl?: string
+  price: number
+  quantity: number
+  variant?: Variant
+  addOns?: AddOn[]
+  branchId: string
 }
 
 interface Branch {
-  _id: string;
-  name: string;
+  _id: string
+  name: string
 }
 
 const colors = {
@@ -86,822 +106,468 @@ const colors = {
   accordionIcon: '#555555',
 };
 
-const screenWidth = Dimensions.get('window').width;
+const screenWidth = Dimensions.get('window').width
 
-const RestaurantMenu: React.FC = () => {
-  const navigation = useNavigation();
-  const { orderState } = useOrder();
-  const router = useRouter();
+export default function RestaurantMenu() {
+  const navigation = useNavigation()
+  const router = useRouter()
+  const { orderState } = useOrder()
 
-  const [loading, setLoading] = useState(true);
-  const [deliveryOption, setDeliveryOption] = useState<'Delivery' | 'Pickup'>('Delivery');
-  const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
-  const [isSheetOpen, setIsSheetOpen] = useState(false);
-  const [selectedVariant, setSelectedVariant] = useState<string | null>(null);
-  const [selectedAddOns, setSelectedAddOns] = useState<string[]>([]);
-  const [itemQuantity, setItemQuantity] = useState(1);
-  const [cart, setCart] = useState<CartItem[]>([]);
-  const [isBranchSheetOpen, setIsBranchSheetOpen] = useState(false);
-  const [branches, setBranches] = useState<Branch[]>([]);
-  const [selectedBranch, setSelectedBranch] = useState<Branch | null>(null);
+  // States
+  const [loading, setLoading] = useState(true)
+  const [showFood, setShowFood] = useState(false) // Delay content after skeleton
+  const [deliveryOption, setDeliveryOption] = useState<'Delivery' | 'Pickup'>('Delivery')
+  const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null)
+  const [isSheetOpen, setIsSheetOpen] = useState(false)
+  const [selectedVariant, setSelectedVariant] = useState<string | null>(null)
+  const [selectedAddOns, setSelectedAddOns] = useState<string[]>([])
+  const [itemQuantity, setItemQuantity] = useState(1)
+  const [cart, setCart] = useState<CartItem[]>([])
+  const [isBranchSheetOpen, setIsBranchSheetOpen] = useState(false)
+  const [branches, setBranches] = useState<Branch[]>([])
+  const [selectedBranch, setSelectedBranch] = useState<Branch | null>(null)
+  const [foodItems, setFoodItems] = useState<{ [categoryName: string]: MenuItem[] }>({})
+  const [categoryIdToName, setCategoryIdToName] = useState<{ [id: string]: string }>({})
+  const [restaurantDetails, setRestaurantDetails] = useState<any>({})
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
 
-  // We'll store our food items in a { [category: string]: MenuItem[] } shape
-  const [foodItems, setFoodItems] = useState<{ [category: string]: MenuItem[] }>({});
-  const [restaurantDetails, setRestaurantDetails] = useState<any>({});
-  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
-
-  const [showFiltersMenu, setShowFiltersMenu] = useState(false);
+  // Filter menu
+  const [showFiltersMenu, setShowFiltersMenu] = useState(false)
   const [filterButtonLayout, setFilterButtonLayout] = useState<{
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-  } | null>(null);
+    x: number
+    y: number
+    width: number
+    height: number
+  } | null>(null)
 
-  const scrollViewRef = useRef<ScrollView>(null);
+  const scrollViewRef = useRef<ScrollView>(null)
 
-  // Enable LayoutAnimation on Android
   if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-    UIManager.setLayoutAnimationEnabledExperimental(true);
+    UIManager.setLayoutAnimationEnabledExperimental(true)
   }
 
-  // Skeleton Components
-  const SkeletonBox = ({
-    width,
-    height,
-    borderRadius = 4,
-    style = {},
-  }: {
-    width: number | string;
-    height: number;
-    borderRadius?: number;
-    style?: any;
-  }) => (
-    <View style={[{ width, height, backgroundColor: '#e0e0e0', borderRadius }, style]} />
-  );
+  // SKELETON -> CONTENT delay
+  useEffect(() => {
+    if (!loading) {
+      const timer = setTimeout(() => {
+        setShowFood(true)
+      }, 200)
+      return () => clearTimeout(timer)
+    } else {
+      setShowFood(false)
+    }
+  }, [loading])
 
-  const SkeletonText = ({
-    width,
-    height = 10,
-    style = {},
-  }: {
-    width: number | string;
-    height?: number;
-    style?: any;
-  }) => (
-    <SkeletonBox width={width} height={height} borderRadius={4} style={style} />
-  );
-
-  /**
-   * Main data fetching logic:
-   * 1. Restaurant details (and fetch the image)
-   * 2. Branches
-   * 3. Food items (for the selected branch, fetch each item's image)
-   * 4. Cart data from storage
-   */
+  // 1) Load Restaurant + Branches
   useEffect(() => {
     const fetchData = async () => {
+      setLoading(true)
       try {
-        // 1) Fetch restaurant details
+        // Restaurant details
         if (orderState.restaurantId) {
-          const response = await getRestaurantById(orderState.restaurantId);
-          const restData = response.data;
-          // If there's an "image" field, fetch it from getFile
+          const rRes = await getRestaurantById(orderState.restaurantId)
+          const restData = rRes.data
+
           if (restData?.image) {
             try {
-              const fileResponse = await getFile(restData.image);
-              restData.imageUrl = fileResponse.data.data; // store as imageUrl
-            } catch (err) {
-              console.log('Error fetching restaurant image:', err);
-            }
-          }
-          setRestaurantDetails(restData);
-        }
-
-        // 2) Fetch branches (for this restaurant)
-        if (orderState.restaurantId) {
-          const response = await getBranches({
-            condition: { restaurant: orderState.restaurantId },
-          });
-          setBranches(response.data.branches);
-        }
-
-        // 3) If we have a selected branch, fetch its food items
-        //    For each item, fetch the file (if .image exists) and store in item.imageUrl
-        if (selectedBranch?._id) {
-          const response = await getFoodItems(selectedBranch._id);
-          const fetchedFoodItems: MenuItem[] = response.data;
-
-          // Convert each item.image to item.imageUrl
-          const updatedFoodItems = await Promise.all(
-            fetchedFoodItems.map(async (item) => {
-              if (item.image) {
-                try {
-                  const fileResponse = await getFile(item.image);
-                  return { ...item, imageUrl: fileResponse.data.data };
-                } catch (error) {
-                  console.log('Error fetching file for item:', item._id, error);
-                  return item; // fallback
-                }
+              let imageId: string | undefined
+              if (Array.isArray(restData.image) && restData.image.length > 0) {
+                imageId = restData.image[0]
+              } else if (typeof restData.image === 'string') {
+                imageId = restData.image
               }
-              return item;
-            })
-          );
-
-          // Group the items by category
-          const groupedItems = updatedFoodItems.reduce((acc: any, item) => {
-            const category = item.category?.name || 'Uncategorized';
-            if (!acc[category]) {
-              acc[category] = [];
+              if (imageId) {
+                const fileRes = await getFile(imageId)
+                restData.imageUrl = fileRes.data.data
+              } else {
+                restData.imageUrl = 'https://via.placeholder.com/128'
+              }
+            } catch {
+              restData.imageUrl = 'https://via.placeholder.com/128'
             }
-            acc[category].push(item);
-            return acc;
-          }, {});
-
-          setFoodItems(groupedItems);
-          setExpandedCategories(new Set(Object.keys(groupedItems)));
-        }
-
-        // 4) If we have a selected branch, load cart from storage
-        if (selectedBranch) {
-          const storedCart = await AsyncStorage.getItem('cart');
-          if (storedCart) {
-            const parsedCart = JSON.parse(storedCart);
-            // If there's an existing cart from a different branch,
-            // prompt the user to clear it or keep it
-            if (parsedCart.length > 0 && parsedCart[0].branchId !== selectedBranch._id) {
-              Alert.alert(
-                'Existing cart found',
-                'You have items from another restaurant. Do you want to clear the cart and start a new order?',
-                [
-                  {
-                    text: 'No',
-                    onPress: () => {},
-                    style: 'cancel',
-                  },
-                  {
-                    text: 'Yes',
-                    onPress: () => {
-                      setCart([]);
-                      AsyncStorage.removeItem('cart');
-                    },
-                  },
-                ],
-                { cancelable: false }
-              );
-            } else {
-              setCart(parsedCart);
-            }
+          } else {
+            restData.imageUrl = 'https://via.placeholder.com/128'
           }
+          setRestaurantDetails(restData)
         }
-      } catch (error) {
-        console.log('Error fetching data:', error);
+
+        // Branches
+        if (orderState.restaurantId) {
+          const bRes = await getBranches({
+            condition: { restaurant: orderState.restaurantId },
+          })
+          setBranches(bRes.data.branches)
+        }
+      } catch (err) {
+        Alert.alert('Error', 'Failed to load data.')
       } finally {
-        setLoading(false);
+        setLoading(false)
       }
-    };
+    }
+    fetchData()
+  }, [orderState.restaurantId])
 
-    fetchData();
-  }, [orderState.restaurantId, selectedBranch]);
-
-  // If we have branches, but no selected branch, pick the first one
+  // 2) If branches exist and none selected, pick first
   useEffect(() => {
     if (branches.length > 0 && !selectedBranch) {
-      setSelectedBranch(branches[0]);
+      setSelectedBranch(branches[0])
     }
-  }, [branches]);
+  }, [branches, selectedBranch])
 
-  // Save cart to AsyncStorage
-  const saveCartToStorage = async (updatedCart: CartItem[]) => {
+  // 3) If branch selected, fetch items + load cart
+  useEffect(() => {
+    const fetchItemsAndCart = async () => {
+      if (!selectedBranch?._id) return
+      setLoading(true)
+      try {
+        // Food items
+        const fiRes = await getFoodItems(selectedBranch._id)
+        const groupedFoodItems = fiRes.data
+
+        // Fetch image for each item
+        const updatedFoodItems = await Promise.all(
+          Object.entries(groupedFoodItems).map(async ([catName, items]) => {
+            const updatedItems = await Promise.all(
+              items.map(async (item: MenuItem) => {
+                if (item.image) {
+                  let imageId: string | undefined
+                  if (Array.isArray(item.image) && item.image.length > 0) {
+                    imageId = item.image[0]
+                  } else if (typeof item.image === 'string') {
+                    imageId = item.image
+                  }
+                  if (imageId) {
+                    try {
+                      const fileResp = await getFile(imageId)
+                      return { ...item, imageUrl: fileResp.data.data }
+                    } catch {
+                      return { ...item, imageUrl: 'https://via.placeholder.com/70' }
+                    }
+                  }
+                }
+                return { ...item, imageUrl: 'https://via.placeholder.com/70' }
+              })
+            )
+            return { [catName]: updatedItems }
+          })
+        )
+
+        // Flatten
+        const flattened = updatedFoodItems.reduce((acc, curr) => ({ ...acc, ...curr }), {})
+        setFoodItems(flattened)
+
+        // categoryId -> categoryName
+        const idToNameMap: { [id: string]: string } = {}
+        Object.keys(flattened).forEach((catName) => {
+          const items = flattened[catName]
+          if (items.length > 0) {
+            idToNameMap[items[0].category._id] = catName
+          }
+        })
+        setCategoryIdToName(idToNameMap)
+
+        // Expand all
+        setExpandedCategories(new Set(Object.keys(flattened)))
+
+        // Load cart
+        const storedCart = await AsyncStorage.getItem('cart')
+        if (storedCart) {
+          const parsedCart: CartItem[] = JSON.parse(storedCart)
+          if (parsedCart.length > 0 && parsedCart[0].branchId !== selectedBranch._id) {
+            Alert.alert(
+              'Existing cart found',
+              'You have items from another branch. Clear cart?',
+              [
+                { text: 'No', style: 'cancel' },
+                {
+                  text: 'Yes',
+                  onPress: () => {
+                    setCart([])
+                    AsyncStorage.removeItem('cart')
+                  },
+                },
+              ],
+              { cancelable: false }
+            )
+          } else {
+            setCart(parsedCart)
+          }
+        } else {
+          setCart([])
+        }
+      } catch (err) {
+        Alert.alert('Error', 'Failed to load items.')
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchItemsAndCart()
+  }, [selectedBranch])
+
+  // ----------------------------------------------------------------
+  // CART logic
+  // ----------------------------------------------------------------
+  const saveCartToStorage = useCallback(async (updatedCart: CartItem[]) => {
     try {
-      await AsyncStorage.setItem('cart', JSON.stringify(updatedCart));
+      await AsyncStorage.setItem('cart', JSON.stringify(updatedCart))
     } catch (error) {
-      console.log('Error saving cart to storage:', error);
+      console.log('Error saving cart to storage:', error)
     }
-  };
+  }, [])
 
-  /**
-   * Cart handling logic
-   */
   const handleAddToCart = (item: MenuItem) => {
     if (cart.length > 0 && selectedBranch) {
       if (cart[0].branchId !== selectedBranch._id) {
         Alert.alert(
           'Existing cart found',
-          'You have items from another restaurant. Do you want to clear the cart and start a new order?',
+          'You have items from another branch. Clear cart first?',
           [
-            {
-              text: 'No',
-              onPress: () => {},
-              style: 'cancel',
-            },
+            { text: 'No', style: 'cancel' },
             {
               text: 'Yes',
               onPress: () => {
-                setCart([]);
-                AsyncStorage.removeItem('cart');
-                proceedToAddItem(item);
+                setCart([])
+                AsyncStorage.removeItem('cart')
+                proceedToAddItem(item)
               },
             },
           ],
           { cancelable: false }
-        );
+        )
       } else {
-        proceedToAddItem(item);
+        proceedToAddItem(item)
       }
     } else {
-      proceedToAddItem(item);
+      proceedToAddItem(item)
     }
-  };
+  }
 
   const proceedToAddItem = (item: MenuItem) => {
-    setSelectedItem(item);
-    setSelectedVariant(item.variants?.[0]?._id || null);
-    setSelectedAddOns([]);
-    setItemQuantity(1);
-    setIsSheetOpen(true);
-  };
+    setSelectedItem(item)
+    setSelectedVariant(item.variants?.[0]?._id || null)
+    setSelectedAddOns([])
+    setItemQuantity(1)
+    setIsSheetOpen(true)
+  }
 
   const handleConfirmAddToCart = () => {
-    if (selectedItem && selectedBranch) {
-      let basePrice = selectedItem.price || 0;
-
-      if (selectedItem.hasVariants) {
-        const variant = selectedItem.variants?.find((v) => v._id === selectedVariant);
-        basePrice = variant?.price || basePrice;
-      }
-
-      const addOnsPrice =
-        selectedItem.addOns
-          ?.filter((a) => selectedAddOns.includes(a._id))
-          .reduce((sum, a) => sum + a.price, 0) || 0;
-
-      const totalPrice = basePrice + addOnsPrice;
-
-      const newFoodItem: CartItem = {
-        id: selectedItem._id,
-        name: selectedItem.name,
-        image: selectedItem.image, // or store selectedItem.imageUrl if needed
-        price: totalPrice,
-        quantity: itemQuantity,
-        variant: selectedItem.variants?.find((v) => v._id === selectedVariant),
-        addOns: selectedItem.addOns?.filter((a) => selectedAddOns.includes(a._id)),
-        branchId: selectedBranch._id,
-      };
-
-      const existingIndex = cart.findIndex(
-        (cItem) =>
-          cItem.id === newFoodItem.id &&
-          cItem.variant?._id === newFoodItem.variant?._id &&
-          JSON.stringify(cItem.addOns?.map((a) => a._id).sort()) ===
-            JSON.stringify(newFoodItem.addOns?.map((a) => a._id).sort())
-      );
-
-      let updatedCart = [...cart];
-
-      if (existingIndex !== -1) {
-        updatedCart[existingIndex].quantity += itemQuantity;
-      } else {
-        updatedCart.push(newFoodItem);
-      }
-
-      setCart(updatedCart);
-      saveCartToStorage(updatedCart);
-      setIsSheetOpen(false);
+    if (!selectedItem || !selectedBranch) return
+    let basePrice = selectedItem.price || 0
+    if (selectedItem.hasVariants) {
+      const variant = selectedItem.variants?.find((v) => v._id === selectedVariant)
+      basePrice = variant?.price || basePrice
     }
-  };
+    const addOnsPrice =
+      selectedItem.addOns
+        ?.filter((a) => selectedAddOns.includes(a._id))
+        .reduce((sum, a) => sum + a.price, 0) || 0
+    const totalPrice = basePrice + addOnsPrice
+
+    const newFoodItem: CartItem = {
+      id: selectedItem._id,
+      name: selectedItem.name,
+      image: selectedItem.image,
+      imageUrl: selectedItem.imageUrl,
+      price: totalPrice,
+      quantity: itemQuantity,
+      variant: selectedItem.variants?.find((v) => v._id === selectedVariant),
+      addOns: selectedItem.addOns?.filter((a) => selectedAddOns.includes(a._id)),
+      branchId: selectedBranch._id,
+    }
+
+    const existingIndex = cart.findIndex(
+      (cItem) =>
+        cItem.id === newFoodItem.id &&
+        cItem.variant?._id === newFoodItem.variant?._id &&
+        JSON.stringify(cItem.addOns?.map((ad) => ad._id).sort()) ===
+          JSON.stringify(newFoodItem.addOns?.map((ad) => ad._id).sort())
+    )
+
+    const updatedCart = [...cart]
+    if (existingIndex !== -1) {
+      updatedCart[existingIndex].quantity += itemQuantity
+    } else {
+      updatedCart.push(newFoodItem)
+    }
+    setCart(updatedCart)
+    saveCartToStorage(updatedCart)
+    setIsSheetOpen(false)
+  }
 
   const handleAddOnToggle = (addOnId: string) => {
     setSelectedAddOns((prev) =>
       prev.includes(addOnId) ? prev.filter((id) => id !== addOnId) : [...prev, addOnId]
-    );
-  };
+    )
+  }
 
   const calculateTotal = () => {
-    if (!selectedItem) return 0;
-    let basePrice = selectedItem.price || 0;
-
+    if (!selectedItem) return 0
+    let basePrice = selectedItem.price || 0
     if (selectedItem.hasVariants) {
-      const variant = selectedItem.variants?.find((v) => v._id === selectedVariant);
-      basePrice = variant?.price || basePrice;
+      const variant = selectedItem.variants?.find((v) => v._id === selectedVariant)
+      basePrice = variant?.price || basePrice
     }
-
     const addOnsPrice =
       selectedItem.addOns
         ?.filter((a) => selectedAddOns.includes(a._id))
-        .reduce((sum, a) => sum + a.price, 0) || 0;
+        .reduce((sum, a) => sum + a.price, 0) || 0
+    return (basePrice + addOnsPrice) * itemQuantity
+  }
 
-    const totalPrice = (basePrice + addOnsPrice) * itemQuantity;
-    return totalPrice;
-  };
-
-  /**
-   * Cart item quantity helpers
-   */
+  // Increment/Decrement
   const getItemQuantityInCart = (menuItem: MenuItem) => {
-    const cartItem = cart.find((cItem) => cItem.id === menuItem._id);
-    return cartItem ? cartItem.quantity : 0;
-  };
-
+    const cartItem = cart.find((cItem) => cItem.id === menuItem._id)
+    return cartItem ? cartItem.quantity : 0
+  }
   const incrementCartItem = (menuItem: MenuItem) => {
-    const existingIndex = cart.findIndex((cItem) => cItem.id === menuItem._id);
-    if (existingIndex !== -1) {
-      const updatedCart = [...cart];
-      updatedCart[existingIndex].quantity += 1;
-      setCart(updatedCart);
-      saveCartToStorage(updatedCart);
+    const idx = cart.findIndex((cItem) => cItem.id === menuItem._id)
+    if (idx !== -1) {
+      const updated = [...cart]
+      updated[idx].quantity += 1
+      setCart(updated)
+      saveCartToStorage(updated)
     } else {
-      handleAddToCart(menuItem);
+      handleAddToCart(menuItem)
     }
-  };
-
+  }
   const decrementCartItem = (menuItem: MenuItem) => {
-    const existingIndex = cart.findIndex((cItem) => cItem.id === menuItem._id);
-    if (existingIndex !== -1) {
-      const updatedCart = [...cart];
-      if (updatedCart[existingIndex].quantity > 1) {
-        updatedCart[existingIndex].quantity -= 1;
+    const idx = cart.findIndex((cItem) => cItem.id === menuItem._id)
+    if (idx !== -1) {
+      const updated = [...cart]
+      if (updated[idx].quantity > 1) {
+        updated[idx].quantity -= 1
       } else {
-        updatedCart.splice(existingIndex, 1);
+        updated.splice(idx, 1)
       }
-      setCart(updatedCart);
-      saveCartToStorage(updatedCart);
+      setCart(updated)
+      saveCartToStorage(updated)
     }
-  };
+  }
 
-  /**
-   * Hide default header
-   */
+  // Hide default header
   useLayoutEffect(() => {
-    navigation.setOptions({
-      headerShown: false,
-    });
-  }, [navigation]);
+    navigation.setOptions({ headerShown: false })
+  }, [navigation])
 
-  /**
-   * Expand/collapse categories
-   */
-  const toggleCategory = (categoryName: string) => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setExpandedCategories((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(categoryName)) {
-        newSet.delete(categoryName);
-      } else {
-        newSet.add(categoryName);
-      }
-      return newSet;
-    });
-  };
-
-  /**
-   * Filter button
-   */
-  const handleFilterButtonLayout = (event: any) => {
-    const { x, y, width, height } = event.nativeEvent.layout;
-    setFilterButtonLayout({ x, y, width, height });
-  };
-
-  /**
-   * Override back button behavior to go back to tabs
-   */
+  // BackHandler override
   useEffect(() => {
     const onBackPress = () => {
-      router.replace('/(tabs)/'); 
-      return true; // Prevent default
-    };
-    BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      router.replace('/(tabs)/')
+      return true
+    }
+    BackHandler.addEventListener('hardwareBackPress', onBackPress)
     return () => {
-      BackHandler.removeEventListener('hardwareBackPress', onBackPress);
-    };
-  }, [router]);
+      BackHandler.removeEventListener('hardwareBackPress', onBackPress)
+    }
+  }, [router])
 
+  // Expand/collapse
+  const toggleCategory = (catName: string) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut)
+    setExpandedCategories((prev) => {
+      const nextSet = new Set(prev)
+      if (nextSet.has(catName)) nextSet.delete(catName)
+      else nextSet.add(catName)
+      return nextSet
+    })
+  }
+
+  // Filter button layout
+  const handleFilterButtonLayout = (evt: any) => {
+    const { x, y, width, height } = evt.nativeEvent.layout
+    setFilterButtonLayout({ x, y, width, height })
+  }
+
+  // Sort logic
+  const sortLowToHigh = () => {
+    const clone = { ...foodItems }
+    Object.keys(clone).forEach((cat) => {
+      clone[cat].sort((a, b) => (a.price || 0) - (b.price || 0))
+    })
+    setFoodItems(clone)
+  }
+  const sortHighToLow = () => {
+    const clone = { ...foodItems }
+    Object.keys(clone).forEach((cat) => {
+      clone[cat].sort((a, b) => (b.price || 0) - (a.price || 0))
+    })
+    setFoodItems(clone)
+  }
+
+  // Reorder categories if there's a selectedCategory
+  const { selectedCategory } = orderState
+  const getReorderedCategories = () => {
+    const catNames = Object.keys(foodItems)
+    let prioritizedName = null
+    if (selectedCategory && categoryIdToName[selectedCategory]) {
+      prioritizedName = categoryIdToName[selectedCategory]
+    }
+    if (prioritizedName && catNames.includes(prioritizedName)) {
+      return [
+        prioritizedName,
+        ...catNames.filter((nm) => nm !== prioritizedName),
+      ]
+    } else {
+      return catNames
+    }
+  }
+  const reorderedCategories = getReorderedCategories()
+
+  /** RENDER **/
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: 30 }}>
+    <View style={{ flex: 1, backgroundColor: '#ffffff', paddingTop: 30 }}>
       <ScrollView ref={scrollViewRef}>
-        <XStack
-          alignItems="center"
-          paddingHorizontal={16}
-          paddingTop={16}
-          paddingBottom={8}
-          justifyContent="space-between"
-        >
-          <Link href='/(tabs)/' asChild>
-            <Pressable>
-              {loading ? (
-                <SkeletonBox width={24} height={24} borderRadius={12} />
-              ) : (
-                <AntDesign name="left" size={24} color={colors.text} />
-              )}
-            </Pressable>
-          </Link>
-        </XStack>
+        {/* 1) Header */}
+        <HeaderSection loading={loading} />
 
-        {/* Restaurant Header (Restaurant Image, Name, Description, etc.) */}
-        <YStack padding={16}>
-          <XStack space={16} alignItems="center">
-            {loading ? (
-              <SkeletonBox width={128} height={128} borderRadius={64} />
-            ) : (
-              <Image
-                source={{
-                  uri:
-                    // Use restaurantDetails.imageUrl if available
-                    restaurantDetails.imageUrl || 'https://via.placeholder.com/128',
-                }}
-                style={{ width: 128, height: 128, borderRadius: 64 }}
-              />
-            )}
-            <YStack flex={1}>
-              {loading ? (
-                <>
-                  <SkeletonText width="60%" height={20} style={{ marginBottom: 8 }} />
-                  <SkeletonText width="80%" height={14} style={{ marginBottom: 4 }} />
-                  <SkeletonText width="40%" height={14} />
-                </>
-              ) : (
-                <>
-                  <Text style={{ color: colors.text, fontSize: 20, fontWeight: '700' }}>
-                    {restaurantDetails.name || 'Restaurant Name'}
-                  </Text>
-                  <Text style={{ color: colors.subtleText, fontSize: 14 }}>
-                    {restaurantDetails.description || 'Restaurant description here.'}
-                  </Text>
-                  <Text style={{ color: colors.subtleText, fontSize: 14 }}>
-                    Rating: {restaurantDetails.rating || 'N/A'} ⭐
-                  </Text>
-                </>
-              )}
-            </YStack>
-          </XStack>
+        {/* 2) RestaurantHeader */}
+        <RestaurantHeader loading={loading} restaurantDetails={restaurantDetails} />
 
-          {/* Branch Selection */}
-          <Pressable
-            onPress={() => !loading && setIsBranchSheetOpen(true)}
-            disabled={loading}
-          >
-            {loading ? (
-              <SkeletonBox width="100%" height={50} borderRadius={12} style={{ marginTop: 16 }} />
-            ) : (
-              <YStack
-                marginTop={16}
-                borderRadius={12}
-                style={{
-                  borderWidth: 1,
-                  borderColor: '#e0e0e0',
-                  backgroundColor: '#ffffff',
-                  shadowColor: '#000',
-                  shadowOpacity: 0.05,
-                  shadowRadius: 5,
-                  shadowOffset: { width: 0, height: 2 },
-                  overflow: 'hidden',
-                }}
-              >
-                <XStack
-                  paddingVertical={12}
-                  paddingHorizontal={16}
-                  alignItems="center"
-                  justifyContent="space-between"
-                >
-                  <XStack alignItems="center" space={8}>
-                    <AntDesign name="enviromento" size={16} color={colors.primary} />
-                    <Text
-                      style={{
-                        color: colors.text,
-                        fontSize: 15,
-                        fontWeight: '600'
-                      }}
-                      numberOfLines={1}
-                    >
-                      {selectedBranch?.name || 'Select a Branch'}
-                    </Text>
-                  </XStack>
-                  <AntDesign name="down" size={16} color={colors.text} />
-                </XStack>
-              </YStack>
-            )}
-          </Pressable>
-        </YStack>
+        {/* 3) BranchSelector */}
+        <BranchSelector
+          loading={loading}
+          selectedBranch={selectedBranch}
+          setIsBranchSheetOpen={setIsBranchSheetOpen}
+        />
 
-        {/* Delivery/Pickup Toggle */}
-        {loading ? (
-          <XStack
-            paddingVertical={5}
-            backgroundColor={colors.lightBackground}
-            borderRadius={16}
-            marginHorizontal={16}
-            marginBottom={16}
-            justifyContent="space-between"
-          >
-            <SkeletonBox width="48%" height={40} borderRadius={12} />
-            <SkeletonBox width="48%" height={40} borderRadius={12} />
-          </XStack>
-        ) : (
-          <XStack
-            paddingVertical={5}
-            backgroundColor={colors.lightBackground}
-            borderRadius={16}
-            marginHorizontal={16}
-            marginBottom={16}
-            justifyContent="space-between"
-          >
-            {['Delivery', 'Pickup'].map((option) => (
-              <Pressable
-                key={option}
-                onPress={() => setDeliveryOption(option as 'Delivery' | 'Pickup')}
-                style={{
-                  backgroundColor: deliveryOption === option ? colors.background : 'transparent',
-                  flex: 1,
-                  paddingVertical: 8,
-                  borderRadius: 12,
-                  marginHorizontal: 4,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <Text
-                  style={{
-                    color: deliveryOption === option ? colors.text : colors.subtleText,
-                    fontSize: 16,
-                    fontWeight: '500',
-                    textAlign: 'center',
-                  }}
-                >
-                  {option}
-                </Text>
-              </Pressable>
-            ))}
-          </XStack>
-        )}
+        {/* 4) Delivery/Pickup Toggle */}
+        <DeliveryPickupToggle
+          loading={loading}
+          deliveryOption={deliveryOption}
+          setDeliveryOption={setDeliveryOption}
+        />
 
-        {/* Filters Button */}
-        <View style={{ position: 'relative', paddingHorizontal: 16, paddingBottom: 8 }}>
-          <XStack paddingVertical={8} justifyContent="flex-end" alignItems="center">
-            {loading ? (
-              <SkeletonBox width={80} height={40} borderRadius={16} />
-            ) : (
-              <Pressable
-                onLayout={handleFilterButtonLayout}
-                onPress={() => setShowFiltersMenu(!showFiltersMenu)}
-                style={{
-                  backgroundColor: colors.background,
-                  borderRadius: 16,
-                  paddingVertical: 8,
-                  paddingHorizontal: 16,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                }}
-              >
-                <Text
-                  style={{ color: colors.text, fontSize: 14, fontWeight: '700', marginRight: 8 }}
-                >
-                  Filters
-                </Text>
-                <AntDesign name="down" size={14} color={colors.text} />
-              </Pressable>
-            )}
-          </XStack>
+        {/* 5) Filter Menu */}
+        <FilterMenu
+          loading={loading}
+          showFiltersMenu={showFiltersMenu}
+          setShowFiltersMenu={setShowFiltersMenu}
+          filterButtonLayout={filterButtonLayout}
+          handleFilterButtonLayout={handleFilterButtonLayout}
+          screenWidth={screenWidth}
+          sortLowToHigh={sortLowToHigh}
+          sortHighToLow={sortHighToLow}
+        />
 
-          {showFiltersMenu && filterButtonLayout && (
-            <View
-              style={[
-                styles.menuContainer,
-                {
-                  position: 'absolute',
-                  top: filterButtonLayout.y + filterButtonLayout.height + 8,
-                  width: filterButtonLayout.width * 1.5,
-                  maxWidth: 250,
-                },
-                (() => {
-                  const menuWidth = filterButtonLayout.width * 1.5;
-                  let leftPosition = filterButtonLayout.x;
-
-                  if (leftPosition + menuWidth > screenWidth - 16) {
-                    leftPosition = screenWidth - menuWidth - 16;
-                  }
-
-                  return { left: leftPosition };
-                })(),
-              ]}
-            >
-              <Pressable
-                style={styles.menuItem}
-                onPress={() => {
-                  setShowFiltersMenu(false);
-                  // your filter logic
-                }}
-              >
-                <AntDesign
-                  name="arrowup"
-                  size={18}
-                  color={colors.text}
-                  style={{ marginRight: 10 }}
-                />
-                <Text style={{ color: colors.text, fontSize: 14 }}>Low to High</Text>
-              </Pressable>
-              <Pressable
-                style={styles.menuItem}
-                onPress={() => {
-                  setShowFiltersMenu(false);
-                  // your filter logic
-                }}
-              >
-                <AntDesign
-                  name="arrowdown"
-                  size={18}
-                  color={colors.text}
-                  style={{ marginRight: 10 }}
-                />
-                <Text style={{ color: colors.text, fontSize: 14 }}>High to Low</Text>
-              </Pressable>
-            </View>
-          )}
-        </View>
-
-        {/* Food Items / Menu List */}
-        <YStack marginBottom={60}>
-          {loading ? (
-            // Loading skeleton
-            <YStack paddingHorizontal={16} paddingTop={24} paddingBottom={10}>
-              {[...Array(3)].map((_, idx) => (
-                <View key={idx} style={{ marginBottom: 20 }}>
-                  <SkeletonText width="40%" height={16} style={{ marginBottom: 12 }} />
-                  {[...Array(2)].map((__, itemIdx) => (
-                    <XStack
-                      key={itemIdx}
-                      paddingVertical={12}
-                      alignItems="center"
-                      justifyContent="space-between"
-                    >
-                      <XStack space={12} flex={1}>
-                        <SkeletonBox width={70} height={70} borderRadius={8} />
-                        <YStack flex={1}>
-                          <SkeletonText width="80%" style={{ marginBottom: 6 }} />
-                          <SkeletonText width="60%" style={{ marginBottom: 6 }} />
-                          <SkeletonText width="40%" />
-                        </YStack>
-                      </XStack>
-                      <SkeletonBox width={80} height={32} borderRadius={16} />
-                    </XStack>
-                  ))}
-                </View>
-              ))}
-            </YStack>
-          ) : (
-            // Render categories and items
-            Object.entries(foodItems).map(([category, items]) => (
-              <YStack key={category} paddingHorizontal={16} paddingTop={24} paddingBottom={10}>
-                <TouchableOpacity
-                  onPress={() => toggleCategory(category)}
-                  activeOpacity={0.7}
-                  style={{
-                    flexDirection: 'row',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    backgroundColor: colors.accordionHeaderBackground,
-                    paddingVertical: 12,
-                    paddingHorizontal: 16,
-                    borderRadius: 12,
-                  }}
-                >
-                  <Text style={{ color: colors.text, fontSize: 16, fontWeight: '700' }}>
-                    {category}
-                  </Text>
-                  <AntDesign
-                    name={expandedCategories.has(category) ? 'up' : 'down'}
-                    size={20}
-                    color={colors.accordionIcon}
-                  />
-                </TouchableOpacity>
-
-                {expandedCategories.has(category) && (
-                  <YStack marginTop={12}>
-                    {items.map((item) => {
-                      const itemAvailable = item.isAvailable;
-                      const itemPrice = item.hasVariants
-                        ? item.variants?.[0]?.price.toFixed(2)
-                        : item.price?.toFixed(2);
-
-                      return (
-                        <XStack
-                          key={item._id}
-                          paddingVertical={12}
-                          alignItems="center"
-                          justifyContent="space-between"
-                          style={{ opacity: itemAvailable ? 1 : 0.5 }}
-                        >
-                          <XStack space={12} flex={1}>
-                            <Image
-                              source={{
-                                uri: item.imageUrl || 'https://via.placeholder.com/70',
-                              }}
-                              style={{ width: 70, height: 70, borderRadius: 8 }}
-                            />
-                            <YStack flex={1}>
-                              <Text style={{ color: colors.text, fontSize: 14, fontWeight: '500' }}>
-                                {item.name}
-                              </Text>
-                              <Text style={{ color: colors.subtleText, fontSize: 12 }}>
-                                ₹{itemPrice}
-                              </Text>
-                              <Text style={{ color: colors.subtleText, fontSize: 12 }}>
-                                {item.description}
-                              </Text>
-                            </YStack>
-                          </XStack>
-                          <YStack alignItems="center">
-                            {getItemQuantityInCart(item) > 0 && itemAvailable ? (
-                              <XStack alignItems="center" space={8}>
-                                <Pressable
-                                  onPress={() => decrementCartItem(item)}
-                                  style={{
-                                    backgroundColor: colors.lightBackground,
-                                    borderRadius: 16,
-                                    width: 32,
-                                    height: 32,
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                  }}
-                                >
-                                  <AntDesign name="minus" size={16} color={colors.text} />
-                                </Pressable>
-                                <Text style={{ color: colors.text, fontSize: 16, fontWeight: '700' }}>
-                                  {getItemQuantityInCart(item)}
-                                </Text>
-                                <Pressable
-                                  onPress={() => incrementCartItem(item)}
-                                  style={{
-                                    backgroundColor: colors.lightBackground,
-                                    borderRadius: 16,
-                                    width: 32,
-                                    height: 32,
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                  }}
-                                >
-                                  <AntDesign name="plus" size={16} color={colors.text} />
-                                </Pressable>
-                              </XStack>
-                            ) : (
-                              <Pressable
-                                onPress={() => itemAvailable && handleAddToCart(item)}
-                                style={{
-                                  backgroundColor: itemAvailable ? colors.primary : colors.lightBackground,
-                                  borderRadius: 16,
-                                  paddingVertical: 8,
-                                  paddingHorizontal: 30,
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                }}
-                                disabled={!itemAvailable}
-                              >
-                                <Text
-                                  style={{
-                                    color: colors.buttonText,
-                                    fontSize: 14,
-                                    fontWeight: '700',
-                                  }}
-                                >
-                                  {itemAvailable ? 'Add' : 'Unavailable'}
-                                </Text>
-                              </Pressable>
-                            )}
-                          </YStack>
-                        </XStack>
-                      );
-                    })}
-                  </YStack>
-                )}
-              </YStack>
-            ))
-          )}
-        </YStack>
+        {/* 6) Food Items List */}
+        <FoodItemsList
+          loading={loading}
+          showFood={showFood}
+          expandedCategories={expandedCategories}
+          toggleCategory={toggleCategory}
+          reorderedCategories={reorderedCategories}
+          foodItems={foodItems}
+          getItemQuantityInCart={getItemQuantityInCart}
+          incrementCartItem={incrementCartItem}
+          decrementCartItem={decrementCartItem}
+          handleAddToCart={handleAddToCart}
+        />
       </ScrollView>
 
-      {/* View Cart Button (if cart has items) */}
-      {cart.length > 0 && !loading && (
-        <Link href="/(tabs)/cart" asChild>
-          <Pressable
-            style={{
-              position: 'absolute',
-              bottom: 20,
-              left: 16,
-              right: 16,
-              backgroundColor: colors.primary,
-              borderRadius: 16,
-              paddingVertical: 12,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <Text style={{ color: colors.buttonText, fontSize: 14, fontWeight: '700' }}>
-              View Cart ({cart.reduce((total, item) => total + item.quantity, 0)} items)
-            </Text>
-          </Pressable>
-        </Link>
-      )}
+      {/* 7) Cart Button */}
+      <CartButton cart={cart} loading={loading} />
 
-      {/* Add-to-Cart Bottom Sheet */}
+      {/* Bottom Sheets */}
       <AddToCartSheet
         isOpen={isSheetOpen}
         onOpenChange={setIsSheetOpen}
@@ -918,7 +584,6 @@ const RestaurantMenu: React.FC = () => {
         colors={colors}
       />
 
-      {/* Branch Selection Bottom Sheet */}
       <BranchSelectionSheet
         isOpen={isBranchSheetOpen}
         onOpenChange={setIsBranchSheetOpen}
@@ -928,28 +593,5 @@ const RestaurantMenu: React.FC = () => {
         colors={colors}
       />
     </View>
-  );
-};
-
-const styles = StyleSheet.create({
-  menuContainer: {
-    backgroundColor: '#ffffff',
-    borderRadius: 8,
-    paddingVertical: 4,
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    zIndex: 9999,
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-  },
-});
-
-export default RestaurantMenu;
+  )
+}

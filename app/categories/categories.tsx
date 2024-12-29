@@ -1,17 +1,20 @@
-import React, { useEffect, useCallback, useLayoutEffect, useState } from 'react'
-import { ScrollView } from 'tamagui'
-import { YStack, XStack, Text, Button, Image } from 'tamagui'
-import Icon from 'react-native-vector-icons/MaterialIcons' 
+// app/context/OrderContext.tsx (add setSelectedCategory method as explained above)
+
+import React, { useEffect, useState,useCallback } from 'react';
+import { ScrollView } from 'tamagui';
+import { YStack, XStack, Text, Image } from 'tamagui';
+import { AntDesign } from '@expo/vector-icons';
 import { Link, useLocalSearchParams, useNavigation } from 'expo-router';
 import { getRestaurantByCategory } from 'app/api/restaurant';
 import { useFocusEffect } from 'expo-router';
 import { useOrder } from 'app/context/orderContext';
+// import { getFile } from 'app/api/fileUploads';
 import { getFile } from 'app/api/flleUploads';
 
 export default function TabOneScreen() {
   const [restaurants, setRestaurants] = useState([]);
   const { categoryId } = useLocalSearchParams();
-  const { updateOrderState } = useOrder();
+  const { updateOrderState, setSelectedCategory } = useOrder();
   const navigation = useNavigation();
 
   /**
@@ -80,6 +83,7 @@ export default function TabOneScreen() {
               asChild
               onPress={() => {
                 updateOrderState('restaurantId', restaurant?._id);
+                setSelectedCategory(categoryId); // Reset selectedCategory when a new restaurant is selected
               }}
             >
               <XStack space="$4" px="$4" py="$3">

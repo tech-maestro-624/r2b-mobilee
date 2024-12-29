@@ -9,7 +9,7 @@ const getRestaurant = async(params ={})=>{
     }
 }
 
-const getRestaurantById = async(id)=>{
+const getRestaurantById = async(id=String)=>{
     try {
         const response = await apiClient().get(`/restaurant/${id}`)
         return response;

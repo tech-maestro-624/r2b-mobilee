@@ -5,8 +5,9 @@ import { useNavigation } from '@react-navigation/native';
 import FontAwesome from 'react-native-vector-icons/FontAwesome';
 import { useForm, Controller } from 'react-hook-form';
 import Toast from 'react-native-toast-message';
-import { useFocusEffect } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import toastConfig from 'app/toast/toastConfig';
+import { updateUser } from 'app/api/user';
 
 interface User {
   _id: string;
@@ -25,26 +26,57 @@ function EditProfile() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(false);
   const navigation = useNavigation();
-  
-  const { control, handleSubmit, setValue, formState: { errors } } = useForm<FormData>({
+
+  const {
+    control,
+    handleSubmit,
+    setValue,
+    formState: { errors },
+  } = useForm<FormData>({
     defaultValues: {
       name: '',
       phone: '',
-      email: ''
-    }
+      email: '',
+    },
   });
 
+  const fetchUserData = async () => {
+    try {
+      const userData = await AsyncStorage.getItem('user');
+      if (userData) {
+        const parsedUser = JSON.parse(userData);
+        console.log('Fetched User:', parsedUser); 
+        setUser(parsedUser);
 
+        setValue('name', parsedUser.name || '');
+        setValue('phone', parsedUser.phoneNumber || '');
+        setValue('email', parsedUser.email || '');
+      }
+    } catch (error) {
+      console.error('Error fetching user data:', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchUserData();
+  }, []);
 
   const onSubmit = async (data: FormData) => {
     const payload = {
-      ...data
+      ...data,
     };
-
+  
     setLoading(true);
     try {
       if (user) {
-       
+        const response = await updateUser(user._id, payload); // Update user API call
+        console.log('Updated User:', response.data);
+  
+        // Update AsyncStorage with the new user data
+        await AsyncStorage.setItem('user', JSON.stringify(response.data));
+        console.log('User data updated in AsyncStorage');
+  
+        // Show success message
         Toast.show({
           type: 'success',
           text1: 'Profile Updated',
@@ -52,6 +84,7 @@ function EditProfile() {
         });
       }
     } catch (error) {
+      // Show error message
       Toast.show({
         type: 'error',
         text1: error?.response?.data?.message || 'Error updating profile',
@@ -64,6 +97,7 @@ function EditProfile() {
       }, 350);
     }
   };
+  
 
   useEffect(() => {
     navigation.setOptions({
@@ -96,7 +130,7 @@ function EditProfile() {
                 rules={{ required: 'Name is required' }}
                 render={({ field: { onChange, onBlur, value } }) => (
                   <TextInput
-                    style={{ flex: 1, fontSize: 16, color: '#333',  paddingVertical: 10, marginLeft: 10 }}
+                    style={{ flex: 1, fontSize: 16, color: '#333', paddingVertical: 10, marginLeft: 10 }}
                     value={value}
                     onChangeText={onChange}
                     onBlur={onBlur}
@@ -121,7 +155,7 @@ function EditProfile() {
                 name="phone"
                 render={({ field: { value } }) => (
                   <TextInput
-                    style={{ flex: 1, fontSize: 16, color: '#333',  paddingVertical: 10, marginLeft: 10 }}
+                    style={{ flex: 1, fontSize: 16, color: '#333', paddingVertical: 10, marginLeft: 10 }}
                     value={value}
                     editable={false}
                     placeholder="Enter Phone"
@@ -147,12 +181,12 @@ function EditProfile() {
                   required: 'Email is required',
                   pattern: {
                     value: /^[a-zA-Z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$/,
-                    message: 'Invalid email address'
-                  }
+                    message: 'Invalid email address',
+                  },
                 }}
                 render={({ field: { onChange, onBlur, value } }) => (
                   <TextInput
-                    style={{ flex: 1, fontSize: 16, color: '#333',  paddingVertical: 10, marginLeft: 10 }}
+                    style={{ flex: 1, fontSize: 16, color: '#333', paddingVertical: 10, marginLeft: 10 }}
                     value={value}
                     onChangeText={onChange}
                     onBlur={onBlur}
@@ -165,42 +199,39 @@ function EditProfile() {
             </XStack>
             {errors.email && <Text style={{ color: 'red' }}>{errors.email.message}</Text>}
           </YStack>
-
         </YStack>
-       
       </ScrollView>
       <XStack
+        style={{
+          justifyContent: 'space-evenly',
+          backgroundColor: '#fff',
+          elevation: 4,
+          paddingBottom: 30,
+        }}
+      >
+        <Button
           style={{
-            justifyContent: 'space-evenly',
-            // padding: 10,
-            backgroundColor: '#fff',
-            elevation: 4,
-            paddingBottom : 30
+            backgroundColor: '#ffffff',
+            paddingHorizontal: 50,
+            borderRadius: 5,
+            borderWidth: 1,
+            borderColor: '#8c57ff',
           }}
+          onPress={() => navigation.goBack()}
         >
-          <Button
-            style={{
-              backgroundColor: '#ffffff',
-              paddingHorizontal: 50,
-              borderRadius: 5,
-              borderWidth: 1, 
-              borderColor: '#8c57ff'
-            }}
-            onPress={() => navigation.goBack()}
-          >
-            <Text color='#8c57ff'>Cancel</Text>
-          </Button>
-          <Button
-            style={{
-              backgroundColor: '#8c57ff',
-              paddingHorizontal: 50,
-              borderRadius: 5,
-            }}
-            onPress={handleSubmit(onSubmit)}
-          >
-            <Text color='#ffffff'>Save</Text>
-          </Button>
-        </XStack>
+          <Text color="#8c57ff">Cancel</Text>
+        </Button>
+        <Button
+          style={{
+            backgroundColor: '#8c57ff',
+            paddingHorizontal: 50,
+            borderRadius: 5,
+          }}
+          onPress={handleSubmit(onSubmit)}
+        >
+          <Text color="#ffffff">Save</Text>
+        </Button>
+      </XStack>
       <Toast config={toastConfig} />
     </View>
   );

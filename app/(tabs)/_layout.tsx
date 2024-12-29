@@ -12,7 +12,7 @@ import { useAuth } from 'app/context/AuthContext';
 import 'react-native-reanimated'; 
 
 export default function TabLayout() {
-  const [loginSkipped, setLogginSkiped] = useState(false);
+  const [loginSkipped, setLoginSkipped] = useState(false);
   const [loading, setLoading] = useState(true); 
   const [cartCount, setCartCount] = useState(0); 
   const theme = useTheme();
@@ -25,20 +25,19 @@ export default function TabLayout() {
     '/offer'      
   ];
 
-  useEffect(() => {
-    const checkLoginSkipped = async () => {
-      try {
-        const loginSkipped = await AsyncStorage.getItem('loginSkipped');
-        setLogginSkiped(loginSkipped === 'true');
-      } catch (e) {
-        console.error('Failed to load loginSkipped from AsyncStorage', e);
-      } finally {
-        setLoading(false);
-      }
-    };
 
-    checkLoginSkipped();
-  }, []);
+
+  // Function to check if login was skipped
+  const checkLoginSkipped = async () => {
+    try {
+      const skipped = await AsyncStorage.getItem('loginSkipped');
+      setLoginSkipped(skipped === 'true');
+    } catch (e) {
+      console.error('Failed to load loginSkipped from AsyncStorage', e);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Function to fetch cart items count
   const fetchCartCount = async () => {
@@ -57,11 +56,25 @@ export default function TabLayout() {
     }
   };
 
+  // Initial check on component mount
+  useEffect(() => {
+    checkLoginSkipped();
+  }, []);
+
+  // Fetch cart count when the component is focused
   useFocusEffect(
     React.useCallback(() => {
       fetchCartCount();
     }, [])
   );
+
+  // Fetch data whenever the pathname (active tab) changes
+  useEffect(() => {
+    // Add any additional fetch functions here if needed
+    fetchCartCount();
+    // Example: fetchUserData();
+    // Example: fetchNotifications();
+  }, [pathname]);
 
   if (loading) {
     return (
@@ -71,7 +84,7 @@ export default function TabLayout() {
     );
   }
 
-  if (!isAuthenticated || !loginSkipped) {
+  if (!isAuthenticated ) {
     return <LoginScreen />;
   }
 

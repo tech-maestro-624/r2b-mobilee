@@ -224,7 +224,7 @@ export default function ConfirmDeliveryLocation() {
         modal
         open={isSheetOpen}
         onOpenChange={setIsSheetOpen}
-        snapPoints={[300, 450]} // Fixed pixel values
+        snapPoints={[400, 450]} // Fixed pixel values
         snapPointsMode="fixed"
         position={0}
         dismissOnSnapToBottom

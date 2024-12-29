@@ -1,45 +1,40 @@
 import React, { useState } from 'react';
-import { SafeAreaView, TextInput, StyleSheet, Image, TouchableOpacity } from 'react-native';
-import { TamaguiProvider, YStack, Button, Text as TamaguiText } from 'tamagui';
-import { Controller, useForm } from 'react-hook-form';
-// import { sendOtp, verifyOtp } from 'app/api/auth';
-import { verifyOtp, sendOtp } from 'app/api/auth';
+import { Image, StyleSheet } from 'react-native';
+import { TamaguiProvider, YStack, Button, Input, Text } from 'tamagui';
+import { useForm, Controller } from 'react-hook-form';
 import Toast from 'react-native-toast-message';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useRouter, Link } from 'expo-router';
 import { useAuth } from 'app/context/AuthContext';
-
-// import Loader from 'app/loader/loader';
-// import toastConfig from 'app/toast/toastConfig';
+import { sendOtp, verifyOtp } from 'app/api/auth';
+// import NotificationHandler from '../notificationHandle';
+import NotificationHandler from 'app/notification/notification';
 import toastConfig from 'app/toast/toastConfig';
-import {  useNavigation } from '@react-navigation/native';
-import { Link } from 'expo-router';
-import { useRouter } from 'expo-router';
-
 
 interface FormData {
-  phoneNumber: string;
-  otp: string;
-  referralCode?: string;
-}
-
-interface OtpData {
   phoneNumber: string;
   otp: string;
 }
 
 const LoginScreen: React.FC = () => {
-  const [otpSent, setOtpSent] = useState<boolean>(false);
-  const [loading, setLoading] = useState<boolean>(false);
-  const [phoneNumber, setPhoneNumber] = useState<string>('');
-  const navigation = useNavigation();
-  const router = useRouter();
-  const {login } = useAuth();
+  const [otpSent, setOtpSent] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [expoPushToken, setExpoPushToken] = useState<string | null>(null);
 
-  const { control, handleSubmit, reset, setValue, formState: { errors } } = useForm<FormData>({
+  const { login } = useAuth();
+  const router = useRouter();
+
+  const {
+    control,
+    handleSubmit,
+    reset,
+    setValue,
+    formState: { errors },
+  } = useForm<FormData>({
     defaultValues: {
       phoneNumber: '',
       otp: '',
-      referralCode: '',
     },
   });
 
@@ -52,9 +47,9 @@ const LoginScreen: React.FC = () => {
         text1: 'OTP has been sent to your mobile number',
         position: 'bottom',
       });
-      setPhoneNumber(data.phoneNumber); 
+      setPhoneNumber(data.phoneNumber);
       setOtpSent(true);
-      setValue('otp', ''); 
+      setValue('otp', '');
     } catch (error: any) {
       Toast.show({
         type: 'error',
@@ -69,15 +64,16 @@ const LoginScreen: React.FC = () => {
   const onSubmitOtp = async (data: FormData) => {
     setLoading(true);
     try {
-      const otpData: OtpData = {
-        phoneNumber, 
+      const otpData = {
+        phoneNumber,
         otp: data.otp,
       };
       const response = await verifyOtp(otpData);
-      console.log(response.data);
+      console.log(response.data.user);
+      
       await AsyncStorage.setItem('user', JSON.stringify(response.data.user));
       router.replace('/');
-      login()
+      login();
     } catch (error: any) {
       Toast.show({
         type: 'error',
@@ -89,11 +85,6 @@ const LoginScreen: React.FC = () => {
     }
   };
 
-  const handleLoginClicked = () => {
-    setOtpSent(false);
-    reset();
-  };
-
   const handleSkip = async () => {
     try {
       await AsyncStorage.setItem('loginSkipped', 'true');
@@ -103,72 +94,122 @@ const LoginScreen: React.FC = () => {
     }
   };
 
-
   return (
     <TamaguiProvider>
-      <SafeAreaView style={styles.container}>
-      <TouchableOpacity onPress={handleSkip} style={styles.skipButton}>
-          <TamaguiText color="#AD40AF" fontSize={16}>
-            Skip
-          </TamaguiText>
-        </TouchableOpacity>
-        <YStack flex={1} justifyContent="center" paddingHorizontal={25}>
-          <YStack flex={0.5} alignItems="center" justifyContent="center" height={300} marginTop={50}>
-          {/* <Image
-        source={require('../../assets/images/4707071.jpg')}
-        style={{ width: '100%', height: 300, resizeMode: 'cover', borderRadius: 15 }}
-      /> */}
+      <YStack flex={1} bg="#6ECCB8">
+      <Image
+            source={require('../../assets/images/login.webp')}
+            style={[styles.topImage, StyleSheet.absoluteFill]}
+          />
+        {/* Top Section with Image */}
+        <YStack flex={0.65} position="relative">
+          
+          <YStack
+            alignItems="center"
+            justifyContent="flex-start"
+            paddingTop="$10" 
+            flex={1}
+          >
+            <Text
+              fontSize="$8"
+              fontWeight="bold"
+              color="#fff"
+              style={{
+                letterSpacing: 2,
+                textShadowColor: 'rgba(0,0,0,0.3)',
+                textShadowOffset: { width: 0, height: 2 },
+                textShadowRadius: 4,
+              }}
+            >
+              ROLL2BOWL
+            </Text>
           </YStack>
+        </YStack>
 
-          <YStack flex={0.5} justifyContent="center" marginTop={50} padding={5}>
-            {!otpSent ? (
-              <YStack marginBottom={15}>
-                <TamaguiText fontSize={15} fontWeight="700" color="#333" textAlign="center" marginBottom={30}>
-                  Sign In or Register
-                </TamaguiText>
+        {/* Bottom Section with Form */}
+        <YStack
+          flex={0.35}
+          bg="white"
+          borderTopLeftRadius={30}
+          borderTopRightRadius={30}
+          padding="$4"
+          alignItems="center"
+          // justifyContent="space-between"
+        >
+          <YStack width="100%">
+            <YStack alignItems="center" marginVertical='$4' >
+              <Text fontSize="$4" color="#333" textAlign="center">
+                Bengaluru’s #1 No Commission
+              </Text>
+              <Text fontSize="$4" color="#333" textAlign="center" marginTop="$1">
+                Food Delivery App
+              </Text>
+            </YStack>
 
+            <YStack width="100%" alignItems="center" paddingHorizontal="$4">
+              {!otpSent ? (
+               <Controller
+               control={control}
+               name="phoneNumber"
+               rules={{
+                 required: 'Phone number is required',
+                 pattern: {
+                   value: /^[6-9]\d{9}$/,
+                   message: 'Enter a valid phone number',
+                 },
+               }}
+               render={({ field: { onChange, value } }) => (
+                 <YStack
+                   flexDirection="row"
+                   alignItems="center"
+                   width="100%"
+                   backgroundColor="#ffffff"
+                   borderWidth={1}
+                   borderColor={errors.phoneNumber ? 'red' : '#ccc'}
+                   borderRadius={8}
+                   paddingHorizontal="$4"
+                   marginVertical="$3"
+                 >
+                   {/* Flag Icon */}
+                   <Image
+                     source={require('../../assets/images/flag.png')} // Add your flag image here
+                     style={{
+                       width: 24,
+                       height: 16,
+                       marginRight: 8,
+                     }}
+                   />
+                   <Text
+                     fontSize="$4"
+                     color="#333"
+                    //  marginRight={4}s
+                     fontWeight="bold"
+                   >
+                     +91
+                   </Text>
+                   {/* Input Field */}
+                   <Input
+  placeholder="Enter mobile number"
+  keyboardType="phone-pad"
+  onChangeText={onChange}
+  value={value}
+  size="$4"
+  flex={1} // Let the input take the remaining space
+  borderWidth={0} // Ensure no border width
+  backgroundColor="#ffffff"
+  style={{
+    borderColor: 'transparent', // Explicitly set the border color to transparent
+    outlineStyle: 'none', // Remove outline on web (optional for web-based implementations)
+  }}
+/>
+
+                 </YStack>
+               )}
+             />
+              ) : (
                 <Controller
                   control={control}
-                  rules={{
-                    required: 'Phone number is required',
-                    pattern: {
-                      value: /^[6-9]\d{9}$/,
-                      message: 'Enter valid Phone number',
-                    },
-                  }}
-                  render={({ field: { onChange, onBlur, value } }) => (
-                    <TextInput
-                      placeholder="Enter mobile number"
-                      placeholderTextColor="#666"
-                      onBlur={onBlur}
-                      onChangeText={onChange}
-                      value={value}
-                      keyboardType="phone-pad"
-                      style={[
-                        styles.textInput,
-                        { borderColor: errors.phoneNumber ? '#FF6B6B' : '#ddd' },
-                      ]}
-                    />
-                  )}
-                  name="phoneNumber"
-                />
-
-                {errors.phoneNumber && (
-                  <TamaguiText color="#FF6B6B" fontSize={14} marginBottom={10}>
-                    {errors.phoneNumber.message}
-                  </TamaguiText>
-                )}
-
-                <Button onPress={handleSubmit(onSubmitPhone)} style={styles.primaryButton}>
-                  <TamaguiText  fontSize={15} color="#fff" textAlign="center">
-                    Send OTP
-                  </TamaguiText>
-                </Button>
-              </YStack>
-            ) : (
-              <YStack marginBottom={15}>
-                <Controller
-                  control={control}
+                  name="otp"
                   rules={{
                     required: 'OTP is required',
                     pattern: {
@@ -176,96 +217,121 @@ const LoginScreen: React.FC = () => {
                       message: 'Enter a valid 6-digit OTP',
                     },
                   }}
-                  render={({ field: { onChange, onBlur, value } }) => (
-                    <TextInput
+                  render={({ field: { onChange, value } }) => (
+                    <Input
                       placeholder="Enter OTP"
-                      placeholderTextColor="#666"
-                      onBlur={onBlur}
+                      keyboardType="numeric"
                       onChangeText={onChange}
                       value={value}
-                      keyboardType="numeric"
-                      style={[
-                        styles.textInput,
-                        { borderColor: errors.otp ? '#FF6B6B' : '#ddd' },
-                      ]}
+                      size="$4"
+                      width="100%"
+                      borderColor={errors.otp ? 'red' : '#ccc'}
+                      //  marginVertical="$4"
+                      marginTop='$4'
+                      backgroundColor='#ffffff'
                     />
                   )}
-                  name="otp"
                 />
+              )}
 
-                {errors.otp && (
-                  <TamaguiText color="#FF6B6B" fontSize={14} marginBottom={10}>
-                    {errors.otp.message}
-                  </TamaguiText>
-                )}
+              {errors.phoneNumber && !otpSent && (
+                <Text color="red" fontSize="$1" marginBottom="$2">
+                  {errors.phoneNumber.message}
+                </Text>
+              )}
+              {errors.otp && otpSent && (
+                <Text color="red" fontSize="$1" marginBottom="$2">
+                  {errors.otp.message}
+                </Text>
+              )}
 
-                <Button onPress={handleSubmit(onSubmitOtp)} style={styles.primaryButton}>
-                  <TamaguiText  fontSize={15} color="#fff" textAlign="center">
-                    Verify OTP
-                  </TamaguiText>
+              {!otpSent ? (
+                <Button
+                  size="$4"
+                  bg="#333A2F"
+                  color="white"
+                  width="100%"
+                  onPress={handleSubmit(onSubmitPhone)}
+                >
+                 <Text color='#ffffff'> Login / Sign Up</Text>
                 </Button>
-
-                <Button onPress={handleLoginClicked} style={styles.secondaryButton}>
-                  <TamaguiText color="#AD40AF"  fontSize={16}>
-                    Back to Login
-                  </TamaguiText>
+              ) : (
+                <Button
+                  size="$4"
+                  bg="#333A2F"
+                  color="white"
+                  width="100%"
+                  onPress={handleSubmit(onSubmitOtp)}
+                  marginTop='$3'
+                >
+                 <Text color='#ffffff'> Verify OTP </Text>
                 </Button>
-              </YStack>
-            )}
+              )}
+            </YStack>
+          </YStack>
 
-            {/* <YStack flexDirection='row' justifyContent="center" alignItems="center" marginBottom={30} marginTop={10}>
-              <TamaguiText color="#888" fontSize={14} marginBottom={10}>
-                New here?
-              </TamaguiText>
-              <Link href="/Register/register" asChild>
-                <TamaguiText  fontSize={15} marginLeft={10} color="#000000" textAlign="center" marginBottom={6}>
-                  Sign Up
-                </TamaguiText>
+          <YStack alignItems="center"   marginVertical="$4">
+            <Text fontSize="$2" textAlign="center">
+              By continuing, you are accepting to our
+            </Text>
+            <YStack
+              flexDirection="row"
+              alignItems="center"
+              justifyContent="center"
+              space="$2"
+            >
+              <Link href="/policies/terms" asChild>
+                <Text
+                  fontSize="$2"
+                  textAlign="center"
+                  fontWeight="bold"
+                  textDecorationLine="underline"
+                >
+                  Terms
+                </Text>
               </Link>
-            </YStack> */}
+              <Text fontSize="$2" textAlign="center">
+                &
+              </Text>
+              <Link href="/policies/services" asChild>
+                <Text
+                  fontSize="$2"
+                  textAlign="center"
+                  fontWeight="bold"
+                  textDecorationLine="underline"
+                >
+                  Services
+                </Text>
+              </Link>
+              <Text fontSize="$2" textAlign="center">
+                &
+              </Text>
+              <Link href="/policies/content" asChild>
+                <Text
+                  fontSize="$2"
+                  textAlign="center"
+                  fontWeight="bold"
+                  textDecorationLine="underline"
+                >
+                  Content Policy
+                </Text>
+              </Link>
+            </YStack>
           </YStack>
         </YStack>
-      </SafeAreaView>
+      </YStack>
       <Toast config={toastConfig} />
+      <NotificationHandler setPushToken={setExpoPushToken} />
     </TamaguiProvider>
   );
 };
 
+export default LoginScreen;
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#ffffff',
-  },
-  textInput: {
+  topImage: {
     width: '100%',
-    height: 55,
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 15,
-    marginBottom: 15,
-    fontSize: 16,
-    color: '#333',
-    backgroundColor: '#FFF',
-  },
-  primaryButton: {
-    backgroundColor: '#AD40AF',
-    borderRadius: 10,
-  },
-  secondaryButton: {
-    marginTop: 10,
-    backgroundColor: 'transparent',
-  },
-  signUpButton: {
-    backgroundColor: '#AD40AF',
-    borderRadius: 10,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-  },
-  skipButton: {
-    alignSelf: 'flex-end',
-    margin: 40,
-    // marginTop:20
+    height: '100%',
+    resizeMode: 'cover',
   },
 });
-
-export default LoginScreen;
