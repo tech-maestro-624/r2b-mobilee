@@ -352,7 +352,7 @@ export default function Cart() {
             // Payment verified
             alert('Payment successful! Your order has been placed.');
             await AsyncStorage.removeItem('cart');
-            router.replace('/orderSuccess');
+            router.replace('/order/orderConfirmation');
           } else {
             alert('Payment verification failed.');
           }

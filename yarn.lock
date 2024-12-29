@@ -1096,6 +1096,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@egjs/hammerjs@npm:^2.0.17":
+  version: 2.0.17
+  resolution: "@egjs/hammerjs@npm:2.0.17"
+  dependencies:
+    "@types/hammerjs": "npm:^2.0.36"
+  checksum: 10/f695129d45edfcfd6c5f2d1d36186da36ffade013991972ce23721a6b7ad7f214ce282abc4023e3f6b63062620852a63e897b523f247804afc7acd188fee9d9d
+  languageName: node
+  linkType: hard
+
 "@emotion/is-prop-valid@npm:^0.8.2":
   version: 0.8.8
   resolution: "@emotion/is-prop-valid@npm:0.8.8"
@@ -4789,6 +4798,13 @@ __metadata:
   version: 7946.0.15
   resolution: "@types/geojson@npm:7946.0.15"
   checksum: 10/226d7ab59540632b19f7889c76c4c586a5104c18c43a81f32974aa035eafe557f86bd5a79ca5568bb63cbe5bfa9014c8e9a29cb0bb3d2f0bd71b0cc13ad8ccb3
+  languageName: node
+  linkType: hard
+
+"@types/hammerjs@npm:^2.0.36":
+  version: 2.0.46
+  resolution: "@types/hammerjs@npm:2.0.46"
+  checksum: 10/1b6502d668f45ca49fb488c01f7938d3aa75e989d70c64801c8feded7d659ca1a118f745c1b604d220efe344c93231767d5cc68c05e00e069c14539b6143cfd9
   languageName: node
   linkType: hard
 
@@ -8569,6 +8585,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"hoist-non-react-statics@npm:^3.3.0":
+  version: 3.3.2
+  resolution: "hoist-non-react-statics@npm:3.3.2"
+  dependencies:
+    react-is: "npm:^16.7.0"
+  checksum: 10/1acbe85f33e5a39f90c822ad4d28b24daeb60f71c545279431dc98c312cd28a54f8d64788e477fe21dc502b0e3cf58589ebe5c1ad22af27245370391c2d24ea6
+  languageName: node
+  linkType: hard
+
 "hosted-git-info@npm:^3.0.2":
   version: 3.0.8
   resolution: "hosted-git-info@npm:3.0.8"
@@ -11790,6 +11815,7 @@ __metadata:
     react-hook-form: "npm:^7.53.2"
     react-native: "npm:0.74.5"
     react-native-fast-image: "npm:^8.6.3"
+    react-native-gesture-handler: "npm:~2.16.1"
     react-native-maps: "npm:1.14.0"
     react-native-razorpay: "npm:^2.3.0"
     react-native-reanimated: "npm:~3.10.1"
@@ -11892,7 +11918,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-is@npm:^16.13.0, react-is@npm:^16.13.1, react-is@npm:^16.8.4":
+"react-is@npm:^16.13.0, react-is@npm:^16.13.1, react-is@npm:^16.7.0, react-is@npm:^16.8.4":
   version: 16.13.1
   resolution: "react-is@npm:16.13.1"
   checksum: 10/5aa564a1cde7d391ac980bedee21202fc90bdea3b399952117f54fb71a932af1e5902020144fb354b4690b2414a0c7aafe798eb617b76a3d441d956db7726fdf
@@ -11937,6 +11963,22 @@ __metadata:
     react: ^17 || ^18
     react-native: ">=0.60.0"
   checksum: 10/ed340c2b6c2e76658fa0a899a45132871017018bec0a03423b7456610810e79b2844dfa16063c05d98b89a7613eeb0de2fdf3ad978cdfa4d488a4e01228a7349
+  languageName: node
+  linkType: hard
+
+"react-native-gesture-handler@npm:~2.16.1":
+  version: 2.16.2
+  resolution: "react-native-gesture-handler@npm:2.16.2"
+  dependencies:
+    "@egjs/hammerjs": "npm:^2.0.17"
+    hoist-non-react-statics: "npm:^3.3.0"
+    invariant: "npm:^2.2.4"
+    lodash: "npm:^4.17.21"
+    prop-types: "npm:^15.7.2"
+  peerDependencies:
+    react: "*"
+    react-native: "*"
+  checksum: 10/227799f5e16f9725d81db524fc06c1fbef226835a5ee989642d132748832f7543ebc750d4309e49bcaa0fb6d1e7dd6b74028785e4b755978ab7f66f05b414c18
   languageName: node
   linkType: hard
 

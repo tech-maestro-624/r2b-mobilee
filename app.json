@@ -17,14 +17,22 @@
     ],
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.roll2bowl.technologies"
+      "bundleIdentifier": "com.roll2bowl.technologies",
+      "config": {
+        "googleMapsApiKey": "AIzaSyDA5ZUSnr2u0nw7Hu49Sm4ebhPte7AwiTM"
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.roll2bowl.technologies"
+      "package": "com.roll2bowl.technologies",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyDA5ZUSnr2u0nw7Hu49Sm4ebhPte7AwiTM"
+        }
+      }
     },
     "web": {
       "bundler": "metro",
