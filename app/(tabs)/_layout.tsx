@@ -7,14 +7,16 @@ import { Home, Tag, ShoppingCart, User } from '@tamagui/lucide-icons';
 import LoginScreen from 'app/Auth/login';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StyleSheet, View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
+import LottieView from 'lottie-react-native';
 import { useFocusEffect } from '@react-navigation/native'; 
 import { useAuth } from 'app/context/AuthContext';
-import 'react-native-reanimated'; 
+import 'react-native-reanimated';
 
 export default function TabLayout() {
   const [loginSkipped, setLoginSkipped] = useState(false);
-  const [loading, setLoading] = useState(true); 
-  const [cartCount, setCartCount] = useState(0); 
+  const [loading, setLoading] = useState(true);
+  const [cartCount, setCartCount] = useState(0);
+  const [showSplash, setShowSplash] = useState(true); // Splash screen state
   const theme = useTheme();
   const router = useRouter();
   const pathname = usePathname(); 
@@ -24,8 +26,6 @@ export default function TabLayout() {
     '/',          
     '/offer'      
   ];
-
-
 
   // Function to check if login was skipped
   const checkLoginSkipped = async () => {
@@ -59,22 +59,46 @@ export default function TabLayout() {
   // Initial check on component mount
   useEffect(() => {
     checkLoginSkipped();
+
+    // Simulate splash screen timeout
+    const splashTimeout = setTimeout(() => {
+      setShowSplash(false);
+    }, 3300); // Show splash for 3 seconds
+
+    return () => clearTimeout(splashTimeout);
   }, []);
 
-  // Fetch cart count when the component is focused
+  // Disable all other effects until splash screen is completed
+  useEffect(() => {
+    if (showSplash) return;
+    fetchCartCount();
+  }, [showSplash]);
+
   useFocusEffect(
     React.useCallback(() => {
+      if (showSplash) return;
       fetchCartCount();
-    }, [])
+    }, [showSplash])
   );
 
-  // Fetch data whenever the pathname (active tab) changes
   useEffect(() => {
-    // Add any additional fetch functions here if needed
+    if (showSplash) return;
     fetchCartCount();
-    // Example: fetchUserData();
-    // Example: fetchNotifications();
-  }, [pathname]);
+  }, [pathname, showSplash]);
+
+  if (showSplash) {
+    return (
+      <View style={styles.splashContainer}>
+        <LottieView
+          source={require('../../assets/animations/Spashscreen rb2.lottie.json')} // Replace with the path to your JSON file
+          autoPlay
+          loop
+          
+          style={styles.lottie}
+        />
+      </View>
+    );
+  }
 
   if (loading) {
     return (
@@ -157,6 +181,16 @@ export default function TabLayout() {
 }
 
 const styles = StyleSheet.create({
+  splashContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#ebeddf',
+  },
+  lottie: {
+    width: 600,
+    height: 600,
+  },
   stickyButton: {
     position: 'absolute',
     bottom: 60,
